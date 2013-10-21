@@ -25,7 +25,6 @@ from logging import info, debug, warn, error
 from common.application import Application
 from common.functions import call
 from testrecordfactory import TestRecordFactory
-#from config import *
 
 class Analysis(Application):
     """Framework for UMIC-Mesh analysis"""
@@ -39,30 +38,28 @@ class Analysis(Application):
 
         # create top-level parser
         Application.__init__(self)
-        self.parser.add_argument('-N', '--nodes', metavar="Nodes",
-                        action = 'store', type=int, dest = 'nodes',
-                        help = 'Limit range of mrouters covered [default: unset]')
-        self.parser.add_argument('-I', '--iterations', metavar="n",
-                        action = 'store', type=int, dest = 'iterations',
-                        help = 'Limit to the first n iterations that were run in a row [default: unset]')
-        self.parser.add_argument('-R', '--runs', metavar="r",
-                        action = 'store', type=int, dest = 'runs',
-                        help = 'Limit to the first r of test runs that were performed in a row [default: unset]')
-        self.parser.add_argument('-D', '--input-directory', metavar="InDir", default="./",
-                        action = 'store', type=str, dest = 'indir',
-                        help = 'Set directory which contains the measurement results [default: %(default)s]')
-        self.parser.add_argument('-O', '--output', metavar="OutDir", default="./",
-                        action = 'store', type=str, dest = 'outdir',
-                        help = 'Set outputdirectory [default: %(default)s]')
-        self.parser.add_argument("-c", "--cfg", metavar = "FILE",
-                        action = "store", dest = "cfgfile",
-                        help = "use the file as config file for LaTeX. "\
-                               "No default packages will be loaded.")
-        self.parser.add_argument("--save", action = "store_true", dest = "save",
-                        help = "save gnuplot and tex files [default: clean up]")
-        self.parser.add_argument("-f", "--force",
-                        action = "store_true", dest = "force",
-                        help = "overwrite existing output")
+        self.parser.add_argument("-n", "--nodes", metavar="NUM", type=int,
+                action="store", help="Limit range of test nodes covered")
+        self.parser.add_argument("-t", "--iterations", metavar="NUM", type=int,
+                action="store", help="Analyze the first '%(metavar)s' "\
+                        "iterations only")
+        self.parser.add_argument("-r", "--runs", metavar="NUM", type=int,
+                action="store", help="Analyse the first '%(metavar)s' of "\
+                        "test runs only")
+        self.parser.add_argument("-i", "--input", metavar="DIR", default="./",
+                action="store", type=str, dest="indir", help="Input "\
+                        "directory that contains the measurement results "\
+                        "(default: %(default)s)")
+        self.parser.add_argument("-o", "--output", metavar="DIR", default="./",
+                action="store", type=str, dest="outdir", help="Set output "\
+                        "directory (default: %(default)s)")
+        self.parser.add_argument("-c", "--cfg", metavar="FILE", type=str,
+                action="store", dest="cfgfile", help="use the file as config "\
+                        "file for LaTeX. No default packages will be loaded")
+        self.parser.add_argument("--save", action="store_true", help="save "\
+                "gnuplot and tex files")
+        self.parser.add_argument("--force", action="store_true",
+                help="overwrite existing output")
 
     def apply_options(self):
         """Configure object based on the options form the argparser"""
