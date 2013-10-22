@@ -39,7 +39,7 @@ class Measurement(Application):
     subclassed to be used.
 
     As usual for Application subclassses, the subclass may add own parameters
-    to self.parser. It must call apply_optiosn() and Measurement2App.set_options
+    to self.parser. It must call apply_options() and Measurement2App.set_options
     afterwards."""
 
     def __init__(self, prog=None, usage=None, description=None, epilog=None):
