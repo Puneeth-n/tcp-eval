@@ -27,7 +27,10 @@ from common.functions import call
 from testrecordfactory import TestRecordFactory
 
 class Analysis(Application):
-    """Framework for UMIC-Mesh analysis"""
+    """Provides an Application wrapper for Analysis classes. Should be
+    subclassed to be used. As usual for Application subclassses, the subclass
+    may add own parameters to self.parser. It must call parse_options()
+    apply_options() and afterwards"""
 
     def __init__(self):
 
@@ -71,7 +74,7 @@ class Analysis(Application):
             sys.exit(1)
 
         if not os.path.exists(self.args.outdir):
-            info("%s does not exist, creating. " % self.args.outdir)
+            info("%s does not exist, creating." %self.args.outdir)
             os.mkdir(self.args.outdir)
 
     def process(self):
@@ -82,10 +85,10 @@ class Analysis(Application):
         pass
 
     def loadRecords(self, onLoad = None, tests = None):
-        """This function creates testrecords from test log files
-           the onLoad function is called with, TestRecord, testname iterationNo
-           and scenarioNo. If tests is set only records for these tests are
-           created.  """
+        """This function creates testrecords from test log files the onLoad
+        function is called with, TestRecord, testname iterationNo and
+        scenarioNo. If tests is set only records for these tests are created
+        """
 
         if not onLoad:
             onLoad = self.onLoad
@@ -129,16 +132,12 @@ class Analysis(Application):
                 warn('some files failed: %s' %failed)
 
     def run(self):
-        """Main Method"""
         raise NotImplementedError
 
     def main(self):
-        """Main method of the ping stats object"""
-
         self.parse_options()
         self.apply_options()
         Analysis.run(self)
-
 
 # this only runs if the module was *not* imported
 if __name__ == '__main__':
