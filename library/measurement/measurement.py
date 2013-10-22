@@ -36,11 +36,9 @@ from network.functions import twisted_sleep
 
 class Measurement(Application):
     """Provides an Application wrapper for Measurement classes. Must be
-    subclassed to be used.
-
-    As usual for Application subclassses, the subclass may add own parameters
-    to self.parser. It must call apply_options() and Measurement2App.set_options
-    afterwards."""
+    subclassed to be used. As usual for Application subclassses, the subclass
+    may add own parameters to self.parser. It must call parse_options()
+    apply_options() and afterwards"""
 
     def __init__(self, prog=None, usage=None, description=None, epilog=None):
 
