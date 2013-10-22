@@ -32,7 +32,7 @@ class Analysis(Application):
     may add own parameters to self.parser. It must call parse_options()
     apply_options() and afterwards"""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
 
         # object variables
         self.action = ''
@@ -40,7 +40,7 @@ class Analysis(Application):
         self.factory = TestRecordFactory()
 
         # create top-level parser
-        Application.__init__(self)
+        Application.__init__(self, **kwargs)
         self.parser.add_argument("-n", "--nodes", metavar="NUM", type=int,
                 action="store", help="Limit range of test nodes covered")
         self.parser.add_argument("-t", "--iterations", metavar="NUM", type=int,
