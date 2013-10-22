@@ -43,13 +43,13 @@ class Analysis(Application):
         Application.__init__(self, **kwargs)
         self.parser.add_argument("-n", "--nodes", metavar="NUM", type=int,
                 action="store", help="Limit range of test nodes covered")
-        self.parser.add_argument("-t", "--iterations", metavar="NUM", type=int,
+        self.parser.add_argument("-i", "--iterations", metavar="NUM", type=int,
                 action="store", help="Analyze the first '%(metavar)s' "\
                         "iterations only")
         self.parser.add_argument("-r", "--runs", metavar="NUM", type=int,
                 action="store", help="Analyse the first '%(metavar)s' of "\
                         "test runs only")
-        self.parser.add_argument("-i", "--input", metavar="DIR", default="./",
+        self.parser.add_argument("-x", "--input", metavar="DIR", default="./",
                 action="store", type=str, dest="indir", help="Input "\
                         "directory that contains the measurement results "\
                         "(default: %(default)s)")
