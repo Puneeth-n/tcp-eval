@@ -188,7 +188,7 @@ class FlowgrindRecordFactory():
             "(?P<cwnd>\d+)\s+(?P<ssth>\d+|INT_MAX|SHRT_MAX)\s+(?P<uack>\d+)\s+(?P<sack>\d+)\s+"\
             "(?P<lost>\d+)\s+(?P<retr>\d+)\s+(?P<tret>\d+)\s+(?P<fack>\d+)\s+(?P<reor>\d+)\s+(?P<bkof>\d+)\s+"\
             # optional lcd revert count
-            "(?P<revr>\d+)\s+"\
+            #"(?P<revr>\d+)\s+"\
             "(?P<krtt>\d+\.\d+)\s+(?P<krttvar>\d+\.\d+)\s+(?P<krto>\d+\.\d+)\s+"\
             "(?P<castate>loss|open|disorder|recover)\s+"\
             "(?P<mss>\d+)\s+(?P<mtu>\d+)\s+",
