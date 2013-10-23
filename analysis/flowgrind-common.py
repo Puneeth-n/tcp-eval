@@ -15,13 +15,14 @@
 # more details.
 
 # python imports
+import sys
 import os
 import os.path
-from logging import info, debug, warn, error
-from sqlite3 import dbapi2 as sqlite
+import textwrap
 import numpy
 import scipy.stats
-import sys
+from logging import info, debug, warn, error
+from sqlite3 import dbapi2 as sqlite
 
 # tcp-eval imports
 from common.functions import call
@@ -29,37 +30,32 @@ from analysis.analysis import Analysis
 from visualization.gnuplot import UmGnuplot, UmLinePointPlot
 
 class ReorderingAnalysis(Analysis):
-    """Application for analysis of flowgrind results.
-       It needs flowlogs produced by the -tcp-more-info branch to fully work.
-       Usually, you won't call this app directly, but use
-       vmesh_dumbbell_flowgrind_complete_test.pl instead."""
+    """Application for analysis of flowgrind results.  It needs flowlogs
+    produced by the -tcp-more-info branch to fully work"""
 
     def __init__(self):
-        Analysis.__init__(self)
+        """Creates a new ReorderingAnalysis object"""
 
-        #self.parser.set_usage("Usage:  %prog [options]\n"\
-        #                      "Creates graphs showing thruput, frs and rtos over the "\
-        #                      "variable given by the option -V.\n"\
-        #                      "For this all flowgrind logs out of input folder are used "\
-        #                      "which have the type given by the parameter -T.")
-
-        self.parser.add_argument('-V', '--variable', metavar="Variable",
-                         action = 'store', type = str, dest = 'variable',
-                         help = 'The variable of the measurement [bnbw|qlimit|rrate|rdelay].')
-        self.parser.add_argument('-T', '--type', metavar="Type",
-                         action = 'store', type = str, dest = 'rotype',
-                         help = 'The type of the measurement [reordering|congestion|both].')
-        self.parser.add_argument('-E', '--plot-error', #metavar="PlotError",
-                         action = 'store_true', dest = 'plot_error',
-                         help = "Plot error bars")
-
-        self.parser.add_argument('-d', '--dry-run',
-                        action = "store_true", dest = "dry_run",
-                        help = "Test the flowlogs only")
-
-        self.parser.add_argument('-F', '--fairness',
-                        action = "store_true", dest = "fairness",
-                        help = "Plot fairness instead")
+        # create top-level parser
+        description = textwrap.dedent("""\
+                Creates graphs showing thruput, fast retransmits and RTOs over
+                the variable given by the option -a. For this all flowgrind
+                logs out of input folder are used which have the type given by
+                the parameter -t.""")
+        Analysis.__init__(self, description=description)
+        self.parser.add_argument("-a", "--variable", action="store",
+                choices=["bnbw", "delay", "qlimit", "rrate", "rdelay",
+                    "ackreor", "ackloss"], help="The variable of the "\
+                        "measurement")
+        self.parser.add_argument("-t", "--type", action="store", dest="rotype",
+                choices=["reordering", "congestion", "both"], help="The type "\
+                        "of the measurement")
+        self.parser.add_argument("-e", "--plot-error", action="store_true",
+                help = "Plot error bars")
+        self.parser.add_argument("-d", "--dry-run", action="store_true",
+                dest="dry_run", help = "Test the flowlogs only")
+        self.parser.add_argument("-f", "--fairness", action = "store_true",
+                help = "Plot fairness instead")
 
         self.plotlabels = dict()
         self.plotlabels["bnbw"]    = r"Bottleneck Bandwidth [$\\si{\\Mbps}$]";
@@ -78,17 +74,6 @@ class ReorderingAnalysis(Analysis):
     def apply_options(self):
         "Set options"
         Analysis.apply_options(self)
-
-        if not self.args.variable:
-            error("Please provide me with the variable and type of the measurement!")
-            sys.exit(1)
-        if self.args.variable != "rrate" and self.args.variable != "rdelay" and self.args.variable != "qlimit" and self.args.variable != "bnbw" and self.args.variable != "delay" and self.args.variable != "ackreor" and self.args.variable != "ackloss":
-            error("I did not recognize the variable you gave me!")
-            sys.exit(1)
-        if self.args.rotype != "reordering" and self.args.rotype != "congestion" and self.args.rotype != "both":
-            error("I did not recognize the type you gave me!")
-            sys.exit(1)
-
 
     def onLoad(self, record, iterationNo, scenarioNo, runNo, test):
         dbcur = self.dbcon.cursor()
