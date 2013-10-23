@@ -15,50 +15,49 @@
 # more details.
 
 # python imports
+import sys
 import os
 import os.path
-from logging import info, debug, warn, error
-from sqlite3 import dbapi2 as sqlite
+import textwrap
 import numpy
 import scipy.stats
-import sys
+from logging import info, debug, warn, error
+from sqlite3 import dbapi2 as sqlite
 
 # tcp-eval imports
 from common.functions import call
 from analysis.analysis import Analysis
 from visualization.gnuplot import UmGnuplot, UmLinePointPlot
 
-class ReorderingAnalysis(Analysis):
-    """Application for analysis of flowgrind results.
-       It needs flowlogs produced by the -tcp-more-info branch to fully work.
-       Usually, you won't call this app directly, but use
-       vmesh_dumbbell_flowgrind_complete_test.pl instead."""
+class TCP-aNCRAnalysis(Analysis):
+    """Application for analysis of TCP-aNCR results.  It needs flowlogs
+    produced by the -tcp-more-info branch to fully work"""
 
     def __init__(self):
         Analysis.__init__(self)
 
-        self.parser.set_usage("Usage:  %prog [options]\n"\
-                              "Creates graphs showing thruput, frs and rtos over the "\
-                              "variable given by the option -V.\n"\
-                              "For this all flowgrind logs out of input folder are used "\
-                              "which have the type given by the parameter -T.")
+        # create top-level parser
+        description = textwrap.dedent("""\
+                Creates graphs showing thruput, fast retransmits and RTOs over
+                the variable given by the option -a. For this all flowgrind
+                logs out of input folder are used which have the type given by
+                the parameter -t.""")
+        Analysis.__init__(self, description=description)
+        self.parser.add_argument("-a", "--variable", action="store",
+                choices=["bnbw", "delay", "qlimit", "rrate", "rdelay",
+                    "ackreor", "ackloss"], help="The variable of the "\
+                        "measurement")
+        self.parser.add_argument("-t", "--type", action="store", dest="rotype",
+                choices=["reordering", "congestion", "both"], help="The type "\
+                        "of the measurement")
+        self.parser.add_argument("-e", "--plot-error", action="store_true",
+                help = "Plot error bars")
+        self.parser.add_argument("-d", "--dry-run", action="store_true",
+                dest="dry_run", help = "Test the flowlogs only")
+        self.parser.add_argument("-f", "--fairness", action = "store_true",
+                help = "Plot fairness instead")
 
-        self.parser.add_option('-V', '--variable', metavar="Variable",
-                         action = 'store', type = 'string', dest = 'variable',
-                         help = 'The variable of the measurement [bnbw|qlimit|rrate|rdelay].')
-        self.parser.add_option('-T', '--type', metavar="Type",
-                         action = 'store', type = 'string', dest = 'rotype',
-                         help = 'The type of the measurement [reordering|congestion|both].')
-        self.parser.add_option('-E', '--plot-error', metavar="PlotError",
-                         action = 'store_true', dest = 'plot_error',
-                         help = "Plot error bars")
-        self.parser.add_option('-d', '--dry-run',
-                        action = "store_true", dest = "dry_run",
-                        help = "Test the flowlogs only")
-        self.parser.add_option('-F', '--fairness',
-                        action = "store_true", dest = "fairness",
-                        help = "Plot fairness instead")
-
+        # Labels for plots - we use nice LaTeX code
         self.plotlabels = dict()
         self.plotlabels["bnbw"]    = r"Bottleneck Bandwidth [$\\si{\\Mbps}$]";
         self.plotlabels["qlimit"]  = r"Bottleneck Queue Length [packets]";
@@ -74,19 +73,10 @@ class ReorderingAnalysis(Analysis):
         self.plotlabels["rtt_avg"] = r"Aplication Layer RTT [$\\si{\\second}$]"
         self.plotlabels["dsacks"]  = r"Spurious Retransmissions [$\\#$]"
 
-    def set_option(self):
+    def apply_options(self):
         "Set options"
-        Analysis.set_option(self)
 
-        if not self.options.variable:
-            error("Please provide me with the variable and type of the measurement!")
-            sys.exit(1)
-        if self.options.variable != "rrate" and self.options.variable != "rdelay" and self.options.variable != "qlimit" and self.options.variable != "bnbw" and self.options.variable != "delay" and self.options.variable != "ackreor" and self.options.variable != "ackloss":
-            error("I did not recognize the variable you gave me!")
-            sys.exit(1)
-        if self.options.rotype != "reordering" and self.options.rotype != "congestion" and self.options.rotype != "both":
-            error("I did not recognize the type you gave me!")
-            sys.exit(1)
+        Analysis.apply_options(self)
 
 
     def onLoad(self, record, iterationNo, scenarioNo, runNo, test):
@@ -94,8 +84,8 @@ class ReorderingAnalysis(Analysis):
 
         try:
             recordHeader   = record.getHeader()
-            src            = recordHeader["flowgrind_src"]
-            dst            = recordHeader["flowgrind_dst"]
+            src            = recordHeader["src"]
+            dst            = recordHeader["dst"]
             run_label      = recordHeader["run_label"]
             scenario_label = recordHeader["scenario_label"]
             variable       = recordHeader["testbed_param_variable"]
@@ -202,8 +192,8 @@ class ReorderingAnalysis(Analysis):
            reordering rate. One line for each scenario.
         """
         y      = 'fairness'
-        x      = self.options.variable
-        rotype = self.options.rotype
+        x      = self.args.variable
+        rotype = self.args.rotype
 
         dbcur = self.dbcon.cursor()
 
@@ -217,8 +207,8 @@ class ReorderingAnalysis(Analysis):
             scen = row[0]
             scenarios.append(scen)
 
-        outdir = self.options.outdir
-        p = UmLinePointPlot("%s_%s_over_%s" % (rotype, y, x), outdir, debug = self.options.debug, force = True)
+        outdir = self.args.outdir
+        p = UmLinePointPlot("%s_%s_over_%s" % (rotype, y, x), outdir, debug = self.args.debug, force = True)
         p.setXLabel(self.plotlabels[x])
         p.setYLabel(self.plotlabels[y])
 
@@ -268,8 +258,8 @@ class ReorderingAnalysis(Analysis):
            reordering rate. One line for each scenario.
         """
 
-        x      = self.options.variable
-        rotype = self.options.rotype
+        x      = self.args.variable
+        rotype = self.args.rotype
 
         dbcur = self.dbcon.cursor()
 
@@ -283,8 +273,8 @@ class ReorderingAnalysis(Analysis):
             (key,val) = row
             scenarios[key] = val
 
-        outdir = self.options.outdir
-        p = UmLinePointPlot("%s_%s_over_%s" % (rotype, y, x), outdir, debug = self.options.debug, force = True)
+        outdir = self.args.outdir
+        p = UmLinePointPlot("%s_%s_over_%s" % (rotype, y, x), outdir, debug = self.args.debug, force = True)
         p.setXLabel(self.plotlabels[x])
         p.setYLabel(self.plotlabels[y])
         #p.setLogScale()
@@ -328,7 +318,7 @@ class ReorderingAnalysis(Analysis):
                 if (y == "rtt_avg" and y_value == 0):
                     continue
                 try:
-                    if self.options.plot_error:
+                    if self.args.plot_error:
                         stddev = self.calculateStdDev(y, x_value, scenarioNo)
                         fhv.write("%u %f %f\n" %(x_value, y_value, stddev))
                     else:
@@ -343,7 +333,7 @@ class ReorderingAnalysis(Analysis):
                 return
 
             # plot
-            if self.options.plot_error:
+            if self.args.plot_error:
                 p.plotYerror(valfilename, scenarios[scenarioNo], linestyle=scenarioNo + 1, using="1:2:3")
                 p.plot(valfilename, title="", linestyle=scenarioNo + 1, using="1:2")
             else:
@@ -358,8 +348,8 @@ class ReorderingAnalysis(Analysis):
         """Calculates the standarddeviation for the values of the YoverXPlot
         """
 
-        x      = self.options.variable
-        rotype = self.options.rotype
+        x      = self.args.variable
+        rotype = self.args.rotype
         dbcur  = self.dbcon.cursor()
 
         query = '''
@@ -417,11 +407,11 @@ class ReorderingAnalysis(Analysis):
         else:
             info("Database already exists, don't load records.")
 
-        if self.options.dry_run:
+        if self.args.dry_run:
             return
 
         # Do Plots
-        if self.options.fairness:
+        if self.args.fairness:
             self.generateFairnessOverXLinePlot()
         else:
             for y in ("thruput", "frs", "rtos", "rtt_avg", "dsacks"):
@@ -431,10 +421,10 @@ class ReorderingAnalysis(Analysis):
     def main(self):
         """Main method of the ping stats object"""
 
-        self.parse_option()
-        self.set_option()
-        ReorderingAnalysis.run(self)
+        self.parse_options()
+        self.apply_options()
+        self.run()
 
 # this only runs if the module was *not* imported
 if __name__ == '__main__':
-    ReorderingAnalysis().main()
+    TCP-aNCRAnalysis().main()
