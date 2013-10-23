@@ -25,12 +25,14 @@ from logging import info, debug, warn, error
 from common.application import Application
 from common.functions import call
 from testrecordfactory import TestRecordFactory
-#from config import *
 
 class Analysis(Application):
-    """Framework for UMIC-Mesh analysis"""
+    """Provides an Application wrapper for Analysis classes. Should be
+    subclassed to be used. As usual for Application subclassses, the subclass
+    may add own parameters to self.parser. It must call parse_options()
+    apply_options() and afterwards"""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
 
         # object variables
         self.action = ''
@@ -38,31 +40,29 @@ class Analysis(Application):
         self.factory = TestRecordFactory()
 
         # create top-level parser
-        Application.__init__(self)
-        self.parser.add_argument('-N', '--nodes', metavar="Nodes",
-                        action = 'store', type=int, dest = 'nodes',
-                        help = 'Limit range of mrouters covered [default: unset]')
-        self.parser.add_argument('-I', '--iterations', metavar="n",
-                        action = 'store', type=int, dest = 'iterations',
-                        help = 'Limit to the first n iterations that were run in a row [default: unset]')
-        self.parser.add_argument('-R', '--runs', metavar="r",
-                        action = 'store', type=int, dest = 'runs',
-                        help = 'Limit to the first r of test runs that were performed in a row [default: unset]')
-        self.parser.add_argument('-D', '--input-directory', metavar="InDir", default="./",
-                        action = 'store', type=str, dest = 'indir',
-                        help = 'Set directory which contains the measurement results [default: %(default)s]')
-        self.parser.add_argument('-O', '--output', metavar="OutDir", default="./",
-                        action = 'store', type=str, dest = 'outdir',
-                        help = 'Set outputdirectory [default: %(default)s]')
-        self.parser.add_argument("-c", "--cfg", metavar = "FILE",
-                        action = "store", dest = "cfgfile",
-                        help = "use the file as config file for LaTeX. "\
-                               "No default packages will be loaded.")
-        self.parser.add_argument("--save", action = "store_true", dest = "save",
-                        help = "save gnuplot and tex files [default: clean up]")
-        self.parser.add_argument("-f", "--force",
-                        action = "store_true", dest = "force",
-                        help = "overwrite existing output")
+        Application.__init__(self, **kwargs)
+        self.parser.add_argument("-n", "--nodes", metavar="NUM", type=int,
+                action="store", help="Limit range of test nodes covered")
+        self.parser.add_argument("-i", "--iterations", metavar="NUM", type=int,
+                action="store", help="Analyze the first '%(metavar)s' "\
+                        "iterations only")
+        self.parser.add_argument("-r", "--runs", metavar="NUM", type=int,
+                action="store", help="Analyse the first '%(metavar)s' of "\
+                        "test runs only")
+        self.parser.add_argument("-x", "--input", metavar="DIR", default="./",
+                action="store", type=str, dest="indir", help="Input "\
+                        "directory that contains the measurement results "\
+                        "(default: %(default)s)")
+        self.parser.add_argument("-o", "--output", metavar="DIR", default="./",
+                action="store", type=str, dest="outdir", help="Set output "\
+                        "directory (default: %(default)s)")
+        self.parser.add_argument("-c", "--cfg", metavar="FILE", type=str,
+                action="store", dest="cfgfile", help="use the file as config "\
+                        "file for LaTeX. No default packages will be loaded")
+        self.parser.add_argument("--save", action="store_true", help="save "\
+                "gnuplot and tex files")
+        self.parser.add_argument("--force", action="store_true",
+                help="overwrite existing output")
 
     def apply_options(self):
         """Configure object based on the options form the argparser"""
@@ -74,7 +74,7 @@ class Analysis(Application):
             sys.exit(1)
 
         if not os.path.exists(self.args.outdir):
-            info("%s does not exist, creating. " % self.args.outdir)
+            info("%s does not exist, creating." %self.args.outdir)
             os.mkdir(self.args.outdir)
 
     def process(self):
@@ -85,10 +85,10 @@ class Analysis(Application):
         pass
 
     def loadRecords(self, onLoad = None, tests = None):
-        """This function creates testrecords from test log files
-           the onLoad function is called with, TestRecord, testname iterationNo
-           and scenarioNo. If tests is set only records for these tests are
-           created.  """
+        """This function creates testrecords from test log files the onLoad
+        function is called with, TestRecord, testname iterationNo and
+        scenarioNo. If tests is set only records for these tests are created
+        """
 
         if not onLoad:
             onLoad = self.onLoad
@@ -132,16 +132,12 @@ class Analysis(Application):
                 warn('some files failed: %s' %failed)
 
     def run(self):
-        """Main Method"""
         raise NotImplementedError
 
     def main(self):
-        """Main method of the ping stats object"""
-
         self.parse_options()
         self.apply_options()
         Analysis.run(self)
-
 
 # this only runs if the module was *not* imported
 if __name__ == '__main__':

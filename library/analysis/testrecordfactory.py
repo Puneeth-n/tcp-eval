@@ -21,10 +21,9 @@ from logging import info, debug, warn, error
 from testrecords_ping import PingRecordFactory
 from testrecords_fping import FpingRecordFactory
 from testrecords_flowgrind import FlowgrindRecordFactory
-from testrecords_rate import RateRecordFactory
 
 class TestRecordFactory:
-    """A factory for test records."""
+    """A factory for test records"""
 
     def __init__(self):
         self.factories = dict()
@@ -38,8 +37,6 @@ class TestRecordFactory:
             factory = FpingRecordFactory()
         elif test=="flowgrind" or test=="multiflowgrind":
             factory = FlowgrindRecordFactory()
-        elif test=="rate":
-            factory = RateRecordFactory()
         else:
             error("No factory found for: %s" %test)
             return None

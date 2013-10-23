@@ -36,13 +36,11 @@ from network.functions import twisted_sleep
 
 class Measurement(Application):
     """Provides an Application wrapper for Measurement classes. Must be
-    subclassed to be used.
+    subclassed to be used. As usual for Application subclassses, the subclass
+    may add own parameters to self.parser. It must call parse_options()
+    apply_options() and afterwards"""
 
-    As usual for Application subclassses, the subclass may add own parameters
-    to self.parser. It must call apply_optiosn() and Measurement2App.set_options
-    afterwards."""
-
-    def __init__(self, prog=None, usage=None, description=None, epilog=None):
+    def __init__(self, **kwargs):
 
         # object variables
         self.logprefix=""
@@ -56,8 +54,7 @@ class Measurement(Application):
         self._stats = dict()
 
         # create top-level parser and subparser
-        Application.__init__(self, prog=prog, usage=usage,
-                description=description, epilog=epilog)
+        Application.__init__(self, **kwargs)
         self.parser.add_argument("-l", "--log-dir", metavar="DIR", default="./",
                 action="store", dest="log_dir", help="Where to store the log "\
                         "files (default: %(default)s)")
