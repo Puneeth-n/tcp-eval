@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# vim:softtabstop=4:shiftwidth=4:expandtab
+# vi:et:sw=4 ts=4
 
 # Copyright (C) 2009 - 2010 Lennart Schulte <lennart.schulte@rwth-aachen.de>
 # Copyright (C) 2013 Alexander Zimmermann <alexander.zimmermann@netapp.com>

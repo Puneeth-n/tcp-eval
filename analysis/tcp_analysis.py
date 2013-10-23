@@ -17,10 +17,10 @@
 # python imports
 import os
 import os.path
-from logging import info, debug, warn, error
-from sqlite3 import dbapi2 as sqlite
 import numpy
 import scipy.stats
+from logging import info, debug, warn, error
+from sqlite3 import dbapi2 as sqlite
 
 # tcp-eval imports
 from common.functions import call

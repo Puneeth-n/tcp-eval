@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# vi:et:sw=4 ts=4
 
 # Copyright (C) 2007 - 2011 Arnd Hannemann <arnd@arndnet.de>
 # Copyright (C) 2013 Alexander Zimmermann <alexander.zimmermann@netapp.com>
@@ -23,7 +24,7 @@ from network.functions import twisted_sleep
 from measurement import measurement, tests
 
 class TcpMeasurement(measurement.Measurement):
-    """This Measurement script resembles measurement for flowgrind-next + lcd evaluation"""
+    """This Measurement script resembles measurement for TCP-LCD evaluation"""
 
     def __init__(self):
         """Constructor of the object"""

@@ -4,7 +4,6 @@
 
 # Copyright (C) 2013 Alexander Zimmermann <alexander.zimmermann@netapp.com>
 # Copyright (C) 2010 Carsten Wolff <carsten@wolffcarsten.de>
-# Copyright (C) 2009 Damian Lukowski <damian@tvk.rwth-aachen.de>
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms and conditions of the GNU General Public License,

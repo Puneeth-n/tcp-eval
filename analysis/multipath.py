@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# vim:softtabstop=4:shiftwidth=4:expandtab
+# vi:et:sw=4 ts=4
 
 # Copyright (C) 2010 Carsten Wolff <carsten@wolffcarsten.de>
 # Copyright (C) 2010 Andreas Seelinger <Andreas.Seelinger@rwth-aachen.de>

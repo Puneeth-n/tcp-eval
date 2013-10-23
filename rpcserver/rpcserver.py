@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# vi:et:sw=4 ts=4
 
-# XMLRPC Server to invoke rpc-modules.
+# Copyright (C) 2007 - 2011 Arnd Hannemann <arnd@arndnet.de>
+# Copyright (C) 2013 Alexander Zimmermann <alexander.zimmermann@netapp.com>
 #
-# Copyright (C) 2007 - 2010 Arnd Hannemann <arnd@arndnet.de>
-# 
 # This program is free software; you can redistribute it and/or modify it
 # under the terms and conditions of the GNU General Public License,
 # version 2, as published by the Free Software Foundation.
