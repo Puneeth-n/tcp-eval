@@ -1,5 +1,6 @@
-#!/usr/bin/env python2.6
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# vi:et:sw=4 ts=4
 
 # Copyright (C) 2007 - 2011 Arnd Hannemann <arnd@arndnet.de>
 # Copyright (C) 2013 Alexander Zimmermann <alexander.zimmermann@netapp.com>
@@ -40,31 +41,22 @@ class TcpMeasurement(measurement.Measurement):
         # common options used for all tests
         opts = dict( flowgrind_cc = "reno",
                      flowgrind_duration = 900,
-                     # flowgrind_opts = "-n 2 -T b=200 -Y b=300 -F 1 -D b=0x04".split(), moved to scenarios
-                     nodetype = "vmeshrouter" )
+                     flowgrind_opts = "-n 2 -F 1 -H s=ath0.mrouter17/mrouter17,d=ath0.mrouter9/mrouter9 -T b=200 -Y b=300".split() )
 
-        # vmeshrouters to test (601-608)
-        all = map(lambda x: "vmrouter%s" %x, [601,602,603,604,605,606,607,608])
+        # meshrouters to test (1-10)
+        all = map(lambda x: "mrouter%s" %x, [8,9,14,15,16,17])
 
         # inner loop configurations
-        runs = [ dict( run_label = r"601\\sra608", src=601, dst=608 )]
+        runs = [ dict( run_label = r"16\\sra8", src=16, dst=8 )]
 
         # repeat loop
-        iterations  = range(1,10)
+        iterations  = range(1,20)
 
         # outer loop with different scenario settings
-        scenarios   = [ dict(   scenario_label = "Single Flow", 
-                                flowgrind_opts = "-n 1 -T b=200 -Y b=300".split()) ,
-                        dict(   scenario_label = "Two flows, default and secondary",
-                                flowgrind_opts = "-n 2 -T b=200 -Y b=300 -F 1 -D b=0x04".split()),
-                        dict(   scenario_label = "Two flows, default and tertiary",
-                                flowgrind_opts = "-n 2 -T b=200 -Y b=300 -F 1 -D b=0x08".split()),
-                        dict(   scenario_label = "Three flows",
-                                flowgrind_opts = "-n 3 -T b=200 -Y b=300 -F 1 -D b=0x04 -F 2 -D b=0x08".split())
-                      ]
+        scenarios   = [ dict( scenario_label = "Flowgrind Example Measurement") ]
 
         # configure testbed
-#        yield self.switchTestbedProfile("flowgrind_test_globecom")
+        yield self.switchTestbedProfile("flowgrind_test_globecom")
 
         # wait a few minutes to let olsr converge
         yield twisted_sleep(3)
@@ -91,7 +83,7 @@ class TcpMeasurement(measurement.Measurement):
                     # actually run tests
                     yield self.run_test(tests.test_flowgrind, **kwargs)
 
-#        yield self.switchTestbedProfile("minimum")
+        yield self.switchTestbedProfile("minimum")
 
         yield self.tear_down()
         reactor.stop()
