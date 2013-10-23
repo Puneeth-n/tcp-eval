@@ -29,7 +29,7 @@ from common.functions import call
 from analysis.analysis import Analysis
 from visualization.gnuplot import UmGnuplot, UmLinePointPlot
 
-class TCP-aNCRAnalysis(Analysis):
+class TCPaNCR_Analysis(Analysis):
     """Application for analysis of TCP-aNCR results.  It needs flowlogs
     produced by the -tcp-more-info branch to fully work"""
 
@@ -39,14 +39,13 @@ class TCP-aNCRAnalysis(Analysis):
         # create top-level parser
         description = textwrap.dedent("""\
                 Creates graphs showing thruput, fast retransmits and RTOs over
-                the variable given by the option -a. For this all flowgrind
-                logs out of input folder are used which have the type given by
-                the parameter -t.""")
+                the variable given. For this all flowgrind logs out of input
+                folder are used which have the type given by the parameter
+                -t.""")
         Analysis.__init__(self, description=description)
-        self.parser.add_argument("-a", "--variable", action="store",
-                choices=["bnbw", "delay", "qlimit", "rrate", "rdelay",
-                    "ackreor", "ackloss"], help="The variable of the "\
-                        "measurement")
+        self.parser.add_argument("variable", action="store", choices=["bnbw",
+            "delay", "qlimit", "rrate", "rdelay", "ackreor", "ackloss"],
+            help="The variable of the measurement")
         self.parser.add_argument("-t", "--type", action="store", dest="rotype",
                 choices=["reordering", "congestion", "both"], help="The type "\
                         "of the measurement")
@@ -427,4 +426,4 @@ class TCP-aNCRAnalysis(Analysis):
 
 # this only runs if the module was *not* imported
 if __name__ == '__main__':
-    TCP-aNCRAnalysis().main()
+    TCPaNCR_Analysis().main()
