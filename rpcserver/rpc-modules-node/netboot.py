@@ -1,10 +1,10 @@
-#!/usr/bin/env python2.5
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# vi:et:sw=4 ts=4
 
-# XMLRPC Server to invoke rpc-modules.
+# Copyright (C) 2007 - 2011 Arnd Hannemann <arnd@arndnet.de>
+# Copyright (C) 2013 Alexander Zimmermann <alexander.zimmermann@netapp.com>
 #
-# Copyright (C) 2007 - 2010 Arnd Hannemann <arnd@arndnet.de>
-# 
 # This program is free software; you can redistribute it and/or modify it
 # under the terms and conditions of the GNU General Public License,
 # version 2, as published by the Free Software Foundation.
@@ -22,10 +22,10 @@ from logging import info, debug, warn, error, critical
 from twisted.internet import defer, threads, protocol, utils
 from twisted.web import xmlrpc
 
-# umic-mesh imports
-from um_rpcservice import RPCService
-from um_twisted_functions import twisted_execute, twisted_call
-from um_twisted_xmlrpc import xmlrpc, xmlrpc_meshconf
+# tcp-eval imports
+from network.rpcservice import RPCService
+from network.functions import twisted_execute, twisted_call
+from network.xmlrpc import xmlrpc, xmlrpc_meshconf
 
 class Netboot(RPCService):
     """Class for managing the netboot module"""
@@ -66,6 +66,7 @@ class Netboot(RPCService):
     #
     # Internal stuff
     #
+    
     def __init__(self, parent = None):
         # Call super constructor
         RPCService.__init__(self, parent)

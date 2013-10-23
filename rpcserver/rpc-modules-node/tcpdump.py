@@ -1,5 +1,18 @@
-#!/usr/bin/env python2.5
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# vi:et:sw=4 ts=4
+
+# Copyright (C) 2007 - 2011 Arnd Hannemann <arnd@arndnet.de>
+# Copyright (C) 2013 Alexander Zimmermann <alexander.zimmermann@netapp.com>
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms and conditions of the GNU General Public License,
+# version 2, as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+# more details.
 
 # python imports
 import os
@@ -13,11 +26,10 @@ from twisted.internet import defer, protocol, reactor, threads
 from twisted.internet import error as twisted_error
 from twisted.web import xmlrpc
 
-# umic-mesh imports
-from um_rpcservice import RPCService
-from um_functions import execute, CommandFailed
-from um_twisted_functions import twisted_sleep
-from um_node import Node
+# tcp-eval imports
+from network.rpcservice import RPCService
+from network.functions import twisted_sleep
+from common.functions import execute, CommandFailed
 
 class Tcpdump(xmlrpc.XMLRPC):
     """Class for managing the packet capturing"""
