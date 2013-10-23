@@ -20,7 +20,6 @@ import os.path
 from logging import info, debug, warn, error
 
 # tcp-eval imports
-from um_config import *
 from analysis.analysis import Analysis
 from visualization.gnuplot import UmPointPlot
 
