@@ -18,8 +18,9 @@
 
 # python imports
 import sys
-import os.path
 import math
+import textwrap
+import os.path
 from logging import info, debug, warn, error
 
 # tcp-eval imports
@@ -28,63 +29,66 @@ from analysis.testrecords_flowgrind import FlowgrindRecordFactory
 from visualization.gnuplot import UmHistogram, UmGnuplot, UmLinePlot, UmStepPlot, UmBoxPlot
 
 class FlowPlotter(Application):
-    def __init__(self):
-        # initialization of the option parser
-        description = "Usage: %prog [options] flowgrind-log[,flowgrind-log,..] [flowgrind-log[,flowgrind-log,..]] ...\n"\
-                      "Creates graphs given by -G for every flowgrind-log specified.\n"\
-                      "For a set of comma-seperated log files an average is built (throughput only!)"
+    """Creates graphs for throughput, cwnd, rtt, dupthresh, and segments out of
+    flowgrind log files"""
 
-        Application.__init__(self, description=description)
+    def __init__(self):
+        """Creates a new FlowPotter object"""
 
         # object variables
         self.factory = FlowgrindRecordFactory()
+        self.graphics_array = []
 
-        self.parser.add_argument('-S', '--startat', metavar="time", default = 0,
-                        action = 'store', type = float, dest = 'startat',
-                        help = 'Start at this point in time [default: %(default)s]')
-        self.parser.add_argument('-E', '--endat', metavar="time", default = 0,
-                        action = 'store', type = float, dest = 'endat',
-                        help = 'Start at this point in time [default: %(default)s]')
-        self.parser.add_argument('-A', '--aname', metavar="filename",
-                        action = 'store', type = str, dest = 'aname', default = "out",
-                        help = 'Set output filename for usage with -a [default: %(default)s]')
-        self.parser.add_argument('-a', '--all',
-                        action = 'store_true', dest = 'all', default = False,
-                        help = 'Print all flowlogs in one graph')
-        self.parser.add_argument('-O', '--output', metavar="OutDir",
-                        action = 'store', type = str, dest = 'outdir', default="./",
-                        help = 'Set outputdirectory [default: %(default)s]')
-        self.parser.add_argument("-c", "--cfg", metavar = "FILE",
-                        action = "store", dest = "cfgfile",
-                        help = "use the file as config file for LaTeX. "\
-                               "No default packages will be loaded.")
-        self.parser.add_argument("-n", "--flow-numbers", metavar = "Flownumbers",
-                        action = 'store', type = str, dest = 'flownumber', default = "0",
-                        help = 'print flow number [default: %(default)s]')
-        self.parser.add_argument("-r", "--resample", metavar = "Rate", default = 0,
-                        action = 'store', type = float, dest = 'resample',
-                        help = 'resample to this sample rate [default:'\
-                               ' dont resample]')
-        self.parser.add_argument("-s", "--dont-plot-source",
-                        action = 'store_false', dest = 'plotsrc', default = True,
-                        help = 'don\'t plot source cwnd and throughput')
-        self.parser.add_argument("-d", "--plot-dest", default = False,
-                        action = 'store_true', dest = 'plotdst',
-                        help = 'plot destination cwnd and throughput')
-        self.parser.add_argument("-G", "--graphics", metavar = "list", default = 'tput,cwnd,rtt,segments',
-                        action = 'store', dest = 'graphics',
-                        help = 'Graphics that will be plotted '\
-                                '[default: %(default)s; optional: dupthresh]')
-        self.parser.add_argument("-f", "--force",
-                        action = "store_true", dest = "force",
-                        help = "overwrite existing output")
-        self.parser.add_argument("--save", action = "store_true", dest = "save",
-                        help = "save gnuplot and tex files [default: clean up]")
-
-        self.parser.add_argument("flowgrindlog")
+        # create top-level parser
+        description = textwrap.dedent("""\
+                      Creates graphs given by -g for every flowgrind-log
+                      specified. For a set of flowgrind log files an average is
+                      built (throughput only!)""")
+        Application.__init__(self, description=description)
+        self.parser.add_argument("flowgrind_log", metavar="log", nargs="+",
+                help="flowgrind log file")
+        self.parser.add_argument("-s", "--plot-source", action="store_false",
+                dest="plotsrc", default=True, help="plot source cwnd and "\
+                        "throughput (default: %(default)s)")
+        self.parser.add_argument("-d", "--plot-dest", action="store_true",
+                dest="plotdst", default=False, help="plot destination cwnd "\
+                        "and throughput (default: %(default)s)")
+        self.parser.add_argument("-x", "--start", metavar="NUM", default=0.0,
+                action="store", type=float, help = "Start at this point in "\
+                        "time (default: %(default)s)")
+        self.parser.add_argument("-y", "--end", metavar="NUM", default=0.0,
+                action="store", type=float, help="End at this point in "\
+                        "time (default: %(default)s)")
+        self.parser.add_argument("-f", "--flow-numbers", metavar="NUM",
+                nargs="+", action="store", type=int, dest="flownumber",
+                default=0, help="plot flows with number '%(metavar)s' "\
+                        "(default: %(default)s)")
+        self.parser.add_argument("-r", "--resample", metavar="RATE",
+                default=0.0, action="store", type=float, help="resample flow "\
+                        "to sample rate '%(metavar)s' (default: %(default)s)")
+        self.parser.add_argument("-a", "--all-in-one", metavar="FILE",
+                action="store", nargs="?", const="flowlog-all", dest="all",
+                help="Plot all flowlogs in one graph into file '%(metavar)s' "\
+                        "(default: %(const)s)")
+        self.parser.add_argument("-g", "--graphics", action="store",
+                choices=["tput", "cwnd", "rtt", "dupthresh", "segments", "all"],
+                default="all", help="graphics that will be plotted "\
+                        "(default: %(default)s)")
+        self.parser.add_argument("-o", "--output", metavar="DIR", default="./",
+                action="store", type=str, dest="outdir", help="Set output "\
+                        "directory (default: %(default)s)")
+        self.parser.add_argument("-c", "--cfg", metavar="FILE", type=str,
+                action="store", dest="cfgfile", help = "use the file as config "\
+                        "file for LaTeX. No default packages will be loaded")
+        self.parser.add_argument("--force", action="store_true",
+                help="overwrite existing output")
+        self.parser.add_argument("--save", action="store_true", help="save "\
+                "gnuplot and tex files")
 
     def apply_options(self):
-        """Set options"""
+        """Configure object based on the options form the argparser.
+        On the given options perform some sanity checks
+        """
 
         Application.apply_options(self)
 
@@ -92,10 +96,17 @@ class FlowPlotter(Application):
             info("%s does not exist, creating. " % self.args.outdir)
             os.mkdir(self.args.outdir)
 
-        if self.args.graphics:
-            self.graphics_array = self.args.graphics.split(',')
+        # create an array with the graphics we want produce
+        if self.args.graphics == "all":
+            self.graphics_array = ['tput', 'cwnd', 'rtt', 'segments']
         else:
-            self.graphics_array = ['tput','cwnd','rtt','segments']
+            self.graphics_array.append(self.args.graphics)
+
+        # default values are string or int, a command line option given by the
+        # user is a list. In oder to access the argument always in the same
+        # way, we convert the string/int into a list
+        if type(self.args.flownumber) == int:
+            self.args.flownumber = [self.args.flownumber]
 
     def resample(self, record, directions, nosamples, flow):
         # get sample rate for resampling
@@ -120,12 +131,12 @@ class FlowPlotter(Application):
                         continue
                     debug("type: %s" %key)
 
-                    #actual resampling happens here
-                    next = 0    # where to store the next resample (at the end this is the number of points)
-                    all = 0     # where are we in the list?
+                    # actual resampling happens here
+                    next = 0 # where to store the next resample (at the end this is the number of points)
+                    all = 0  # where are we in the list?
                     while all < nosamples:
-                        sum = 0         # sum of all parts
-                        r = rate        # how much to sum up
+                        sum = 0  # sum of all parts
+                        r = rate # how much to sum up
 
                         if all != int(all):             # not an int
                             frac = 1 - (all - int(all)) # get the fraction which has not yet been included
@@ -145,12 +156,12 @@ class FlowPlotter(Application):
                             all += r
                             r = 0
 
-                        out = sum/(rate-r)  # out is the value for the interval
-                                            # r is not 0, if we are at the end of the list
+                        out = sum/(rate-r) # out is the value for the interval
+                                           # r is not 0, if we are at the end of the list
                         data[next] = out
                         next += 1
 
-                    #truncate table to new size
+                    # truncate table to new size
                     del flow[d][key][next:nosamples]
 
                 # set begin and end time
@@ -190,11 +201,12 @@ class FlowPlotter(Application):
             debug("nosamples: %i" %nosamples)
 
             # resampling
-            nosamples = self.resample(record, directions, nosamples, flow)  # returns the new value for nosamples if anything was changed
+            # returns the new value for nosamples if anything was changed
+            nosamples = self.resample(record, directions, nosamples, flow)
 
             flow_array.append([plotname, flow, record, nosamples])
 
-        #build average, save it to flow_array[0]
+        # build average, save it to flow_array[0]
         if len(flow_array) > 1:
             for i in range(len(flow_array[0][1]['S']['tput'])):
                 avg_S = 0
@@ -205,16 +217,16 @@ class FlowPlotter(Application):
                 flow_array[0][1]['S']['tput'][i] = avg_S/len(flow_array)
                 flow_array[0][1]['D']['tput'][i] = avg_D/len(flow_array)
 
-        plotname = flow_array[0][0] #just take one
-        flow = flow_array[0][1]        #average for all files
-        record = flow_array[0][2]      #hopefully the used parameter is always the same :)
+        plotname = flow_array[0][0] # just take one
+        flow = flow_array[0][1]     # average for all files
+        record = flow_array[0][2]   # hopefully the used parameter is always the same :)
         nosamples = min([flow_array[i][3] for i in range(len(flow_array))])
 
-        #delete all data BEFORE some given time
-        if self.args.startat > 0:
+        # delete all data BEFORE some given time
+        if self.args.start > 0:
             for i in range(nosamples):
-                if flow['D']['begin'][i] > self.args.startat: #get point where the time is over the threshold
-                    for d in directions:    #delete all entries before this point
+                if flow['D']['begin'][i] > self.args.start: # get point where the time is over the threshold
+                    for d in directions: # delete all entries before this point
                         for key in flow[d].keys():
                             try:
                                 len(flow[d][key])
@@ -223,11 +235,11 @@ class FlowPlotter(Application):
                     break
             nosamples = nosamples-i
 
-        #delete all data AFTER some given time
-        if self.args.endat > 0:
+        # delete all data AFTER some given time
+        if self.args.end > 0:
             for i in range(nosamples):
-                if flow['D']['begin'][i] > self.args.endat: #get point where the time is over the threshold
-                    for d in directions:    #delete all entries before this point
+                if flow['D']['begin'][i] > self.args.end: # get point where the time is over the threshold
+                    for d in directions: # delete all entries before this point
                         for key in flow[d].keys():
                             try:
                                 len(flow[d][key])
@@ -273,7 +285,9 @@ class FlowPlotter(Application):
                                       flownumber)
         except:
             label = ""
-        fh.write("# start_time end_time forward_tput reverse_tput forward_cwnd reverse_cwnd ssth krtt krto lost reor retr tret dupthresh\n")
+        fh.write("# start_time end_time forward_tput reverse_tput "\
+                "forward_cwnd reverse_cwnd ssth krtt krto lost reor retr "\
+                "tret dupthresh\n")
         for i in range(nosamples):
             formatfields = (flow['S']['begin'][i],
                             flow['S']['end'][i],
@@ -301,19 +315,19 @@ class FlowPlotter(Application):
 
     def plot(self, *plotnameList):
         outdir = self.args.outdir
-
         outname = plotnameList[0][0]
+
         if len(plotnameList) > 1:
-            outname = self.args.aname
+            outname = self.args.all
 
         if 'tput' in self.graphics_array:
             # tput
             p = UmLinePlot(outname+'_tput', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
             p.setYLabel(r"Throughput [$\\si{\\Mbps}$]")
             p.setXLabel(r"Time [$\\si{\\second}$]")
-            if self.args.endat and self.args.startat:
+            if self.args.end and self.args.start:
                 p.setXRange("[ %f : %f ]"
-                        %(self.args.startat,self.args.endat) )
+                        %(self.args.start,self.args.end) )
             count = 0
             for plotname, label in plotnameList:
                 count += 1
@@ -333,9 +347,9 @@ class FlowPlotter(Application):
             p = UmLinePlot(outname+'_cwnd_ssth', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
             p.setYLabel(r"$\\#$")
             p.setXLabel(r"Time [$\\si{\\second}$]")
-            if self.args.endat and self.args.startat:
+            if self.args.end and self.args.start:
                 p.setXRange("[ %f : %f ]"
-                        %(self.args.startat,self.args.endat) )
+                        %(self.args.start,self.args.end) )
 
             count = 0
             for plotname, label in plotnameList:
@@ -352,9 +366,9 @@ class FlowPlotter(Application):
             p = UmLinePlot(outname+'_rto_rtt', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
             p.setYLabel(r"$\\si{\\milli\\second}$")
             p.setXLabel(r"Time [$\\si{\\second}$]")
-            if self.args.endat and self.args.startat:
+            if self.args.end and self.args.start:
                 p.setXRange("[ %f : %f ]"
-                        %(self.args.startat,self.args.endat) )
+                        %(self.args.start,self.args.end) )
 
             count = 0
             for plotname, label in plotnameList:
@@ -370,9 +384,9 @@ class FlowPlotter(Application):
             p = UmLinePlot(outname+'_lost_reor_retr', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
             p.setYLabel(r"$\\#$")
             p.setXLabel(r"Time [$\\si{\\second$]")
-            if self.args.endat and self.args.startat:
+            if self.args.end and self.args.start:
                 p.setXRange("[ %f : %f ]"
-                        %(self.args.startat,self.args.endat) )
+                        %(self.args.start,self.args.end) )
 
             count = 0
             for plotname, label in plotnameList:
@@ -392,9 +406,9 @@ class FlowPlotter(Application):
             p.setXLabel(r"Time $[\\si{\\second}]$")
             #max_y_value = max(flow['S']['reor'] + flow['S']['dupthresh'])
             #p.setYRange("[*:%u]" % int(max_y_value + ((20 * max_y_value) / 100 )))
-            if self.args.endat and self.args.startat:
+            if self.args.end and self.args.start:
                 p.setXRange("[ %f : %f ]"
-                        %(self.args.startat,self.args.endat) )
+                        %(self.args.start,self.args.end) )
 
             count = 0
             for plotname, label in plotnameList:
@@ -408,25 +422,28 @@ class FlowPlotter(Application):
     def run(self):
         """Run..."""
 
+        # helper variable
         plotnameList = []
-        if not self.args.all:
-            #for infile in self.args.flowgrindlog:
-            infile = self.args.flowgrindlog
-            for n in self.args.flownumber.split(","):
-                plotname = self.write_values(infile, int(n))
-                self.plot(plotname)
-                if not self.args.save:
-                    os.remove(os.path.join(self.args.outdir, plotname[0]+".values"))
-        else:
-            for infile in self.args.flowgrindlog:
-                for n in self.args.flownumber.split(","):
-                    plotnameList.append(self.write_values(infile, int(n)))
 
+        # iterate over all log and flow numbers
+        for infile in self.args.flowgrind_log:
+            for n in self.args.flownumber:
+                plotname = self.write_values(infile, int(n))
+                plotnameList.append(plotname)
+
+                # plot graph for fg log now
+                if not self.args.all:
+                    self.plot(plotname)
+
+        # plot combined graph for all fg logs
+        if self.args.all:
             self.plot(*plotnameList)
 
-            if not self.args.save:
-                for plotname, label in plotnameList:
-                    os.remove(plotname+".values")
+        # clean up
+        if not self.args.save:
+            for plotname, label in plotnameList:
+                os.remove(os.path.join(self.args.outdir, "%s.values "\
+                        "%(plotname)"))
 
     def main(self):
         self.parse_options()
