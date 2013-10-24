@@ -44,8 +44,8 @@ class TCPaNCR_Analysis(Analysis):
                 -t.""")
         Analysis.__init__(self, description=description)
         self.parser.add_argument("variable", action="store", choices=["bnbw",
-            "delay", "qlimit", "rrate", "rdelay", "ackreor", "ackloss"],
-            help="The variable of the measurement")
+                "delay", "qlimit", "rrate", "rdelay", "ackreor", "ackloss"],
+                help="The variable of the measurement")
         self.parser.add_argument("-t", "--type", action="store", dest="rotype",
                 choices=["reordering", "congestion", "both"], help="The type "\
                         "of the measurement")
