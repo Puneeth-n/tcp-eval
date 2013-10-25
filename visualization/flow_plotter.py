@@ -442,8 +442,8 @@ class FlowPlotter(Application):
         # clean up
         if not self.args.save:
             for plotname, label in plotnameList:
-                os.remove(os.path.join(self.args.outdir, "%s.values "\
-                        "%(plotname)"))
+                os.remove(os.path.join(self.args.outdir, "%s.values"
+                    %(plotname)))
 
     def main(self):
         self.parse_options()
