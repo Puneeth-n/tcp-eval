@@ -15,6 +15,7 @@
 # more details.
 
 # python imports
+import sys
 import os.path
 import tempfile
 import shutil
@@ -22,7 +23,7 @@ from pyPdf import PdfFileWriter, PdfFileReader
 from logging import info, debug, warn, error
 
 # tcp-eval imports
-from common.functions import call
+from common.functions import call, CommandFailed
 
 class UmLatex():
     """Class to convert latex figures (e.g. tikz) to pdf graphics"""
@@ -33,32 +34,32 @@ class UmLatex():
         """Constructor of the object"""
 
         # tex filename and figures names (for building output files)
-        self._figures = list()
-        self._texfile = "main.tex"
-        self._outdir = os.getcwd()
-        self._tempdir = tempfile.mkdtemp()
+        self.__figures = list()
+        self.__texfile = "main.tex"
+        self.__outdir = os.getcwd()
+        self.__tempdir = tempfile.mkdtemp()
 
         # set members only if arguments are not None
-        self._texfile = self.__getValidTexfile(texfile)
-        self._outdir = self.__getValidOutdir(outdir)
+        self.__texfile = self.__getValidTexfile(texfile)
+        self.__outdir = self.__getValidOutdir(outdir)
 
         # force/debug mode
-        self._force = force
-        self._debug = debug
+        self.__force = force
+        self.__debug = debug
 
         # latex content
-        self._documentclass = ''
-        self._packages = list()
-        self._settings = list()
-        self._content = list()
+        self.__documentclass = ''
+        self.__packages = list()
+        self.__settings = list()
+        self.__content = list()
 
         # load default values for the latex document (class/packages/settings)
         self.loadDefaults(defaultPackages, defaultSettings, siunitx, tikz)
 
     def __del__(self):
-        """Destructor of the object"""
+        """Destructor clean up temp folder"""
 
-        shutil.rmtree(self._tempdir)
+        shutil.rmtree(self.__tempdir)
 
     def loadDefaults(self, defaultPackages=True, defaultSettings=True,
                        siunitx=True, tikz=True):
@@ -74,29 +75,29 @@ class UmLatex():
         self.setDocumentclass("scrartcl")
 
         if defaultPackages:
-            self.addPackage("etex")
-            self.addPackage("babel", "english")
             self.addPackage("inputenc", "utf8")
             self.addPackage("fontenc", "T1")
             self.addPackage("lmodern")
-            self.addPackage("textcomp")
+            self.addPackage("xspace")
             self.addPackage("graphicx")
             self.addPackage("xcolor")
 
-        if defaultSettings:
+        if defaultSettings
             self.addSetting(r"\pagestyle{empty}")
 
             # some arrows
-            self.addSetting(r"\newcommand*{\Implies}"\
+            self.addSetting(r"\newcommand*{\la}"\
+                    r"{\ensuremath{\leftarrow}\xspace}")
+            self.addSetting(r"\newcommand*{\ra}"\
                     r"{\ensuremath{\rightarrow}\xspace}")
-            self.addSetting(r"\newcommand*{\IFF}"\
-                    r"{\ensuremath{\leftrightarrow}\xspace}")
-            self.addSetting(r"\newcommand*{\IF}"\
+            self.addSetting(r"\newcommand*{\La}"\
                     r"{\ensuremath{\Rightarrow}\xspace}")
-            self.addSetting(r"\newcommand*{\SRA}"\
-                    r"{\ensuremath{\shortrightarrow}\xspace}")
-            self.addSetting(r"\newcommand*{\SLA}"\
-                    r"{\ensuremath{\shortleftarrow}\xspace}")
+            self.addSetting(r"\newcommand*{\Ra}"\
+                    r"{\ensuremath{\Leftarrow}\xspace}")
+            self.addSetting(r"\newcommand*{\Lra}"\
+                    r"{\ensuremath{\leftrightarrow}\xspace}")
+            self.addSetting(r"\newcommand*{\Lra}"\
+                    r"{\ensuremath{\Leftrightarrow}\xspace}")
 
         # load siunitx
         if siunitx:
@@ -136,55 +137,55 @@ class UmLatex():
                     "positioning,fit}")
 
     def __buildDocument(self):
-        packages = "\n".join(self._packages)
-        settings = "\n".join(self._settings)
-        content  = "\n".join(self._content)
+        packages = "\n".join(self.__packages)
+        settings = "\n".join(self.__settings)
+        content  = "\n".join(self.__content)
         document = "%s\n%s\n%s\n\\begin{document}\n%s\n\\end{document}"\
-            %(self._documentclass , packages, settings, content)
+            %(self.__documentclass , packages, settings, content)
 
         return document
 
     def __getValidTexfile(self, texfile):
         """If the parameter "texfile" is "None" return the privat member
-        variable "self._texfile" otherwise return the parameter itself """
+        variable "self.__texfile" otherwise return the parameter itself """
 
         if texfile:
             return texfile
         else:
-            return self._texfile
+            return self.__texfile
 
     def __getValidOutdir(self, outdir):
         """If the parameter "outdir" is "None" return the privat member
-        variable "self._outdir" otherwise return the parameter itself """
+        variable "self.__outdir" otherwise return the parameter itself """
 
         if outdir:
             return outdir
         else:
-            return self._outdir
+            return self.__outdir
 
     def __getValidTempdir(self, tempdir):
         """If the parameter "tempdir" is "None" return the privat member
-        variable "self._tempdir" otherwise return the parameter itself """
+        variable "self.__tempdir" otherwise return the parameter itself """
 
         if tempdir:
             return tempdir
         else:
-            return self._tempdir
+            return self.__tempdir
 
     def setDocumentclass(self, documentclass, *options):
         """Set the latex documentclass for the document"""
 
         if options:
             options = ", ".join(options)
-            self._documentclass = "\\documentclass[%s]{%s}"\
+            self.__documentclass = "\\documentclass[%s]{%s}"\
                     %(options, documentclass)
         else:
-            self._documentclass = "\\documentclass{%s}" %(documentclass)
+            self.__documentclass = "\\documentclass{%s}" %(documentclass)
 
     def addPackage(self, package, *options):
         """Add the given package with its options to the document. Only the
         name of the package is needed. The "\usepackage{}" latex command will
-        be automatically added """
+        be automatically added"""
 
         if options:
             options = ", ".join(options)
@@ -192,19 +193,19 @@ class UmLatex():
         else:
             command = "\\usepackage{%s}" %(package)
 
-        self._packages.append(command)
+        self.__packages.append(command)
 
     def addSetting(self, command):
         """Add an arbitrary latex command/setting to the document. The given
         command the will be added before the latex "\begin{document}" """
 
-        self._settings.append(command)
+        self.__settings.append(command)
 
     def addContent(self, content):
         """Add arbitrary latex content to the document. The content will be
         added after the latex "\begin{document}" """
 
-        self._content.append(content)
+        self.__content.append(content)
 
     def addLatexFigure(self, latexfig, figname, command=None):
         """Add a latex figure to the document. The figure given by the
@@ -215,7 +216,7 @@ class UmLatex():
         given, it will be added before the figure is included """
 
         # save the name of the figure for further uses
-        self._figures.append(figname)
+        self.__figures.append(figname)
 
         self.addContent("\\begin{figure}\n\\centering")
         # if an additional command is given, we added it
@@ -234,7 +235,7 @@ class UmLatex():
         destdir = self.__getValidOutdir(outdir)
         texDst = os.path.join(destdir, texfile)
 
-        if not self._force and os.path.exists(texDst):
+        if not self.__force and os.path.exists(texDst):
             error("%s already exists. Skipped." %texDst)
             return
 
@@ -259,17 +260,22 @@ class UmLatex():
         # run pdflatex
         info("Run pdflatex on %s..." %texfile)
         cmd = "pdflatex -jobname %s -output-directory %s" %(texfile, tempdir)
-        if self._debug:
-            call(cmd, input=document)
-        else:
-            call(cmd, input=document, noOutput=True)
+        try:
+            if self.__debug:
+                call(cmd, input=document)
+            else:
+                call(cmd, input=document, noOutput=True)
+        except CommandFailed:
+            error("pdflatex fails. Please re-run '%s' with --debug to get "\
+                    "pdflatex'es output "%(os.path.basename(sys.argv[0])))
+            sys.exit(1)
 
         # open new generated pdf file
         combinedPDF = os.path.join(tempdir, "%s.pdf" %texfile)
         pdfIn = PdfFileReader(open(combinedPDF, "r"))
 
         # iterate over the number of figures to spit and crop the pdf
-        for page, figure in enumerate(self._figures):
+        for page, figure in enumerate(self.__figures):
             # output path
             splitPDF = os.path.join(tempdir, "%s.a4.pdf" %figure)
             cropPDF = os.path.join(tempdir, "%s.crop.pdf" %figure)
@@ -286,14 +292,14 @@ class UmLatex():
             # crop pdf
             info("Run pdfcrop on %s..." %figure)
             cmd = "pdfcrop %s %s" %(splitPDF, cropPDF)
-            if self._debug:
+            if self.__debug:
                 call(cmd)
             else:
                 call(cmd, noOutput = True)
 
             # copy cropped pdfs to final destination
             pdfDst = os.path.join(destdir, "%s.pdf" %figure)
-            if not self._force and os.path.exists(pdfDst):
+            if not self.__force and os.path.exists(pdfDst):
                 error("%s already exists. Skipped." %pdfDst)
             else:
                 shutil.copy(cropPDF, pdfDst)
