@@ -91,10 +91,10 @@ class UmLatex():
             self.addSetting(r"\newcommand*{\ra}"\
                     r"{\ensuremath{\rightarrow}\xspace}")
             self.addSetting(r"\newcommand*{\La}"\
-                    r"{\ensuremath{\Rightarrow}\xspace}")
-            self.addSetting(r"\newcommand*{\Ra}"\
                     r"{\ensuremath{\Leftarrow}\xspace}")
-            self.addSetting(r"\newcommand*{\Lra}"\
+            self.addSetting(r"\newcommand*{\Ra}"\
+                    r"{\ensuremath{\Rightarrow}\xspace}")
+            self.addSetting(r"\newcommand*{\lra}"\
                     r"{\ensuremath{\leftrightarrow}\xspace}")
             self.addSetting(r"\newcommand*{\Lra}"\
                     r"{\ensuremath{\Leftrightarrow}\xspace}")
