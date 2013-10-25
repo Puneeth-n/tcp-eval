@@ -37,7 +37,8 @@ class FlowPlotter(Application):
 
         # object variables
         self.factory = FlowgrindRecordFactory()
-        self.graphics_array = []
+        # all graphics that currently be supported
+        self.graphics_array = ("tput", "cwnd", "rtt", "dupthresh", "retrans")
 
         # create top-level parser
         description = textwrap.dedent("""\
@@ -70,10 +71,10 @@ class FlowPlotter(Application):
                 action="store", nargs="?", const="flowlog-all", dest="all",
                 help="Plot all flowlogs in one graph into file '%(metavar)s' "\
                         "(default: %(const)s)")
-        self.parser.add_argument("-g", "--graphics", action="store",
-                choices=["tput", "cwnd", "rtt", "dupthresh", "segments", "all"],
-                default="all", help="graphics that will be plotted "\
-                        "(default: %(default)s)")
+        self.parser.add_argument("-g", "--graphic", action="store", nargs="+",
+                metavar="PLOT", choices=self.graphics_array + ("all",),
+                default="all", help="graphic that will be plotted. Possible "\
+                        "choices are: {%(choices)s} (default: %(default)s)")
         self.parser.add_argument("-o", "--output", metavar="DIR", default="./",
                 action="store", type=str, dest="outdir", help="Set output "\
                         "directory (default: %(default)s)")
@@ -97,10 +98,8 @@ class FlowPlotter(Application):
             os.mkdir(self.args.outdir)
 
         # create an array with the graphics we want produce
-        if self.args.graphics == "all":
-            self.graphics_array = ['tput', 'cwnd', 'rtt', 'segments']
-        else:
-            self.graphics_array.append(self.args.graphics)
+        if "all" not in self.args.graphic:
+            self.graphics_array = self.args.graphic
 
         # default values are string or int, a command line option given by the
         # user is a list. In oder to access the argument always in the same
@@ -379,11 +378,11 @@ class FlowPlotter(Application):
             # output plot
             p.save()
 
-        if 'segments' in self.graphics_array:
+        if 'retrans' in self.graphics_array:
             # lost, reorder, retransmit
             p = UmLinePlot(outname+'_lost_reor_retr', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
             p.setYLabel(r"$\\#$")
-            p.setXLabel(r"Time [$\\si{\\second$]")
+            p.setXLabel(r"Time [$\\si{\\second}$]")
             if self.args.end and self.args.start:
                 p.setXRange("[ %f : %f ]"
                         %(self.args.start,self.args.end) )
