@@ -82,7 +82,7 @@ class UmLatex():
             self.addPackage("graphicx")
             self.addPackage("xcolor")
 
-        if defaultSettings
+        if defaultSettings:
             self.addSetting(r"\pagestyle{empty}")
 
             # some arrows
