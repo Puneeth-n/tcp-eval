@@ -48,16 +48,13 @@ class FlowPlotter(Application):
         Application.__init__(self, description=description)
         self.parser.add_argument("flowgrind_log", metavar="log", nargs="+",
                 help="flowgrind log file")
-        self.parser.add_argument("-s", "--plot-source", action="store_false",
-                dest="plotsrc", default=True, help="plot source cwnd and "\
-                        "throughput (default: %(default)s)")
-        self.parser.add_argument("-d", "--plot-dest", action="store_true",
-                dest="plotdst", default=False, help="plot destination cwnd "\
-                        "and throughput (default: %(default)s)")
-        self.parser.add_argument("-x", "--start", metavar="NUM", default=0.0,
+        self.parser.add_argument("-n", "--node", action="store",
+                choices=["src", "dst", "both"], default="src", help="node "\
+                        "to be plotted (default: %(default)s)")
+        self.parser.add_argument("-s", "--start", metavar="NUM", default=0.0,
                 action="store", type=float, help = "Start at this point in "\
                         "time (default: %(default)s)")
-        self.parser.add_argument("-y", "--end", metavar="NUM", default=0.0,
+        self.parser.add_argument("-e", "--end", metavar="NUM", default=0.0,
                 action="store", type=float, help="End at this point in "\
                         "time (default: %(default)s)")
         self.parser.add_argument("-f", "--flow-numbers", metavar="NUM",
@@ -73,14 +70,15 @@ class FlowPlotter(Application):
                         "(default: %(const)s)")
         self.parser.add_argument("-g", "--graphic", action="store", nargs="+",
                 metavar="PLOT", choices=self.graphics_array + ("all",),
-                default="all", help="graphic that will be plotted. Possible "\
+                default="all", help="variable that will be plotted. Possible "\
                         "choices are: {%(choices)s} (default: %(default)s)")
         self.parser.add_argument("-o", "--output", metavar="DIR", default="./",
                 action="store", type=str, dest="outdir", help="Set output "\
                         "directory (default: %(default)s)")
         self.parser.add_argument("-c", "--cfg", metavar="FILE", type=str,
-                action="store", dest="cfgfile", help = "use the file as config "\
-                        "file for LaTeX. No default packages will be loaded")
+                action="store", dest="cfgfile", help = "use the file as "\
+                        "config file for LaTeX. No default packages will be "\
+                        "loaded")
         self.parser.add_argument("--force", action="store_true",
                 help="overwrite existing output")
         self.parser.add_argument("--save", action="store_true", help="save "\
@@ -302,9 +300,11 @@ class FlowPlotter(Application):
                             flow['S']['retr'][i],
                             flow['S']['tret'][i] )
             formatstring = "%f %f %f %f %f %f %f %f %f %f %f %f %f"
-            if 'dupthresh' in self.graphics_array:
-                formatfields += tuple([flow['S']['dupthresh'][i]])
-                formatstring += " %f"
+
+            # to plot linux and tcp-ancr dupthresh together
+#            if 'dupthresh' in self.graphics_array:
+#                formatfields += tuple([flow['S']['dupthresh'][i]])
+#                formatstring += " %f"
             formatstring += "\n"
             fh.write( formatstring % formatfields )
         fh.close()
@@ -313,109 +313,166 @@ class FlowPlotter(Application):
 
 
     def plot(self, *plotnameList):
+        """Produce the plot"""
+
+        # Output directory and file name
         outdir = self.args.outdir
         outname = plotnameList[0][0]
 
+        # if we want a combined all-in-one plot
         if len(plotnameList) > 1:
             outname = self.args.all
 
-        if 'tput' in self.graphics_array:
-            # tput
-            p = UmLinePlot(outname+'_tput', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
-            p.setYLabel(r"Throughput [$\\si{\\Mbps}$]")
-            p.setXLabel(r"Time [$\\si{\\second}$]")
+        # plot throughput
+        if "tput" in self.graphics_array:
+            p = UmLinePlot(outname+"_tput", self.args.outdir,
+                    debug=self.args.debug, saveit=self.args.save,
+                    force=self.args.force)
+            p.setYLabel(r"Throughput $[\\si{\\Mbps}]$")
+            p.setXLabel(r"Time $[\\si{\\second}]$")
             if self.args.end and self.args.start:
-                p.setXRange("[ %f : %f ]"
-                        %(self.args.start,self.args.end) )
-            count = 0
-            for plotname, label in plotnameList:
-                count += 1
-                valfilename = os.path.join(outdir, plotname+".values")
-                if self.args.plotsrc and self.args.plotdst:
-                    p.plot(valfilename, "forward path %s" %label, using="2:3", linestyle=2*count)
-                    p.plot(valfilename, "reverse path %s" %label, using="2:4", linestyle=2*count+1)
-                elif self.args.plotsrc and not self.args.plotdst:
-                    p.plot(valfilename, "%s" %label, using="2:3", linestyle=count+1)
-                elif self.args.plotdst and not self.args.plotsrc:
-                    p.plot(valfilename, "%s" %label, using="2:4", linestyle=count+1)
-            # output plot
-            p.save()
-
-        if 'cwnd' in self.graphics_array:
-            # cwnd
-            p = UmLinePlot(outname+'_cwnd_ssth', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
-            p.setYLabel(r"$\\#$")
-            p.setXLabel(r"Time [$\\si{\\second}$]")
-            if self.args.end and self.args.start:
-                p.setXRange("[ %f : %f ]"
-                        %(self.args.start,self.args.end) )
+                p.setXRange("[ %f : %f ]" %(self.args.start, self.args.end))
 
             count = 0
             for plotname, label in plotnameList:
                 valfilename = os.path.join(outdir, plotname+".values")
-                if self.args.plotsrc: p.plot(valfilename, "Sender CWND %s" %label, using="2:5", linestyle=3*count+1)
-                if self.args.plotdst: p.plot(valfilename, "Receiver CWND %s" %label, using="2:6", linestyle=3*count+2)
-                p.plot(valfilename, "SSTHRESH %s" %label, using="2:7", linestyle=3*count+3)
+                # plotting both sender and receiver side
+                if self.args.node == "both":
+                    p.plot(valfilename, "Forward path %s" %label, using="2:3",
+                            linestyle=2*count)
+                    p.plot(valfilename, "Reverse path %s" %label, using="2:4",
+                            linestyle=2*count+1)
+                # plotting sender side only
+                elif self.args.node == "src":
+                    p.plot(valfilename, "%s" %label, using="2:3",
+                            linestyle=count+1)
+                # plotting receiver side only
+                elif self.args.node == "dst":
+                    p.plot(valfilename, "%s" %label, using="2:4",
+                            linestyle=count+1)
                 count += 1
-            # output plot
+
+            # plot and create pdf
             p.save()
 
-        if 'rtt' in self.graphics_array:
-            # rto, rtt
-            p = UmLinePlot(outname+'_rto_rtt', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
+        # plot cwnd and ssthresh
+        if "cwnd" in self.graphics_array:
+            p = UmLinePlot(outname+"_cwnd_ssth", self.args.outdir,
+                    debug=self.args.debug, saveit=self.args.save,
+                    force=self.args.force)
+            p.setYLabel(r"Segment $[\\#]$")
+            p.setXLabel(r"Time $[\\si{\\second}]$")
+            if self.args.end and self.args.start:
+                p.setXRange("[ %f : %f ]" %(self.args.start, self.args.end))
+
+            count = 0
+            for plotname, label in plotnameList:
+                valfilename = os.path.join(outdir, plotname+".values")
+                # plotting sender side
+                if self.args.node == "src":
+                    p.plot(valfilename, "Sender CWND %s" %label, using="2:5",
+                            linestyle=2*count+1)
+                    p.plot(valfilename, "Sender SSTHRESH %s" %label, using="2:7",
+                            linestyle=2*count+3)
+                # plotting receiver side
+                if self.args.node == "dst":
+                    p.plot(valfilename, "Receiver CWND %s" %label, using="2:6",
+                            linestyle=1*count+2)
+                count += 1
+
+            # plot and create pdf
+            p.save()
+
+        # plot rto and rtt
+        if "rtt" in self.graphics_array:
+            p = UmLinePlot(outname+"_rto_rtt", self.args.outdir,
+                    debug=self.args.debug, saveit=self.args.save,
+                    force=self.args.force)
             p.setYLabel(r"$\\si{\\milli\\second}$")
-            p.setXLabel(r"Time [$\\si{\\second}$]")
+            p.setXLabel(r"Time $[\\si{\\second}]$")
             if self.args.end and self.args.start:
-                p.setXRange("[ %f : %f ]"
-                        %(self.args.start,self.args.end) )
-
-            count = 0
-            for plotname, label in plotnameList:
-                count += 1
-                valfilename = os.path.join(outdir, plotname+".values")
-                p.plot(valfilename, "RTO %s" %label, using="2:9", linestyle=2*count)
-                p.plot(valfilename, "RTT %s" %label, using="2:8", linestyle=2*count+1)
-            # output plot
-            p.save()
-
-        if 'retrans' in self.graphics_array:
-            # lost, reorder, retransmit
-            p = UmLinePlot(outname+'_lost_reor_retr', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
-            p.setYLabel(r"$\\#$")
-            p.setXLabel(r"Time [$\\si{\\second}$]")
-            if self.args.end and self.args.start:
-                p.setXRange("[ %f : %f ]"
-                        %(self.args.start,self.args.end) )
+                p.setXRange("[ %f : %f ]" %(self.args.start, self.args.end))
 
             count = 0
             for plotname, label in plotnameList:
                 valfilename = os.path.join(outdir, plotname+".values")
-                p.plot(valfilename, "lost segments %s" %label, using="2:10", linestyle=4*count+1)
-                p.plot(valfilename, "dupthresh %s" %label, using="2:11", linestyle=4*count+2)
-                p.plot(valfilename, "fast retransmits %s" %label, using="2:12", linestyle=4*count+3)
-                p.plot(valfilename, "timeout retransmits %s" %label, using="2:13", linestyle=4*count+4)
+                # plotting sender side
+                if self.args.node == "src":
+                    p.plot(valfilename, "RTO %s" %label, using="2:9",
+                            linestyle=2*count)
+                    p.plot(valfilename, "RTT %s" %label, using="2:8",
+                            linestyle=2*count+1)
+                # plotting receiver side
+                if self.args.node == "dst":
+                    #FIXME
+                    raise NotImplementedError
                 count += 1
-            # output plot
+
+            # plot and create pdf
             p.save()
 
-        if 'dupthresh' in self.graphics_array:
-            # dupthresh, tp->reordering
-            p = UmStepPlot(outname+'_reordering_dupthresh', self.args.outdir, debug=self.args.debug, saveit=self.args.save, force=self.args.force)
+        # plot lost segments, fast retransmits and rto retransmissions
+        if "retrans" in self.graphics_array:
+            p = UmLinePlot(outname+"_lost_retr_rto", self.args.outdir,
+                    debug=self.args.debug, saveit=self.args.save,
+                    force=self.args.force)
+            p.setYLabel(r"Segment $[\\#]$")
+            p.setXLabel(r"Time $[\\si{\\second}]$")
+            if self.args.end and self.args.start:
+                p.setXRange("[ %f : %f ]" %(self.args.start, self.args.end))
+
+            count = 0
+            for plotname, label in plotnameList:
+                valfilename = os.path.join(outdir, plotname+".values")
+                # plotting sender side
+                if self.args.node == "src":
+                    p.plot(valfilename, "Lost segments %s" %label,
+                            using="2:10", linestyle=3*count+1)
+                    p.plot(valfilename, "Fast retransmits %s" %label,
+                            using="2:12", linestyle=3*count+3)
+                    p.plot(valfilename, "Timeout retransmits %s" %label,
+                            using="2:13", linestyle=3*count+4)
+                # plotting receiver side
+                if self.args.node == "dst":
+                    #FIXME
+                    raise NotImplementedError
+                count += 1
+
+            # plot and create pdf
+            p.save()
+
+        # plot tp->reordering (or TCP-aNCR dupthresh)
+        if "dupthresh" in self.graphics_array:
+            p = UmStepPlot(outname+'_dupthresh', self.args.outdir,
+                    debug=self.args.debug, saveit=self.args.save,
+                    force=self.args.force)
             p.setYLabel(r"Dupthresh $[\\#]$")
             p.setXLabel(r"Time $[\\si{\\second}]$")
-            #max_y_value = max(flow['S']['reor'] + flow['S']['dupthresh'])
-            #p.setYRange("[*:%u]" % int(max_y_value + ((20 * max_y_value) / 100 )))
             if self.args.end and self.args.start:
                 p.setXRange("[ %f : %f ]"
                         %(self.args.start,self.args.end) )
 
+            # to plot linux and tcp-ancr dupthresh together
+#            max_y_value = max(flow['S']['reor'] + flow['S']['dupthresh'])
+#            p.setYRange("[*:%u]" % int(max_y_value + ((20 * max_y_value) / 100 )))
+
             count = 0
             for plotname, label in plotnameList:
-                count += 1
                 valfilename = os.path.join(outdir, plotname+".values")
-                p.plot(valfilename, "Linux", using="2:11", linestyle=2*count)
-                p.plot(valfilename, "%s" %label, using="2:14", linestyle=2*count+1)
-            # output plot
+                # plotting sender side
+                if self.args.node == "src":
+                    p.plot(valfilename, "Dupthresh %s" %label, using="2:11",
+                            linestyle=2*count+1)
+                    # to plot linux and tcp-ancr dupthresh together
+#                    p.plot(valfilename, "%s" %label, using="2:14",
+#                            linestyle=2*count+2)
+                # plotting receiver side
+                if self.args.node == "dst":
+                    #FIXME
+                    raise NotImplementedError
+                count += 1
+
+            # plot and create pdf
             p.save()
 
     def run(self):
