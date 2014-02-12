@@ -22,7 +22,6 @@ import textwrap
 import tempfile
 import xmlrpclib
 import socket
-import MySQLdb
 from logging import info, debug, warn, error
 
 # tcp-eval imports
@@ -36,7 +35,6 @@ class VMNode(Application):
         """Creates a new VMNode object"""
 
         # database and xend connection
-        self.dbconn = None
         self.xenconn = None
 
         # other object variables
@@ -50,13 +48,7 @@ class VMNode(Application):
                 together with their respected owner (requires a MySQL
                 database connection).""")
         Application.__init__(self, description=description)
-        database_group = self.parser.add_mutually_exclusive_group()
-        database_group.add_argument("-d", "--database", action="store",
-                metavar=("HOST", "DB", "USER", "PASSWD"), nargs=4,
-                help="establish database connection to store domU ownerships")
-        database_group.add_argument("-n", "--no-database", action="store_true",
-                default=True, help="do action without database connection "\
-                        "(default: %(default)s)")
+        
         subparsers = self.parser.add_subparsers(title="subcommands",
                 dest="action", help="additional help")
 
@@ -94,7 +86,7 @@ class VMNode(Application):
                         "in MB to allocate to domU (default: %(default)s)")
         create_group = parser_create.add_mutually_exclusive_group()
         create_group.add_argument("-c", "--console", action="store_true",
-                default=False, help="attaches to domU console (xm -c)")
+                default=False, help="attaches to domU console (xl -c)")
         create_group.add_argument("-y","--dry-run", action="store_true",
                 default=False, help="do not start domUs automatically; "\
                         "create start file (XEN config file) only")
@@ -166,43 +158,6 @@ class VMNode(Application):
             # way, we convert the string into a list
             if type(self.args.host) == str:
                 self.args.host = str(self.args.host).split()
-
-    def db_connect(self, host, db, user, passwd, abort_on_failure=True):
-        """Establish MySQL database connection to store domU ownerships"""
-
-        try:
-            self.dbconn = MySQLdb.connect(host=host, db=db, user=user,
-                    passwd=passwd)
-            self.dbconn.autocommit(True)
-        except Exception, exception:
-            error_msg = "Could not connect to database"
-            if abort_on_failure:
-                error("%s: %s. Exit" %(error_msg, exception))
-                sys.exit(1)
-            else:
-                warn("%s: %s. Continue" %(error_msg, exception))
-
-    def db_insert(self, vm_hostname):
-        """Insert domU with their respected owner into the database"""
-
-        if os.environ.has_key("SUDO_USER"):
-            user = os.environ["SUDO_USER"]
-        else:
-            user = os.environ["USER"]
-
-        cursor = self.dbconn.cursor()
-        query = "INSERT INTO nodes_vmesh (nodeID,created_by) "\
-                "SELECT nodeID,'%s' FROM nodes WHERE nodes.name='%s' "\
-                "ON DUPLICATE KEY UPDATE created_by='%s';"\
-                        %(user, vm_hostname, user)
-        cursor.execute(query)
-
-    def db_delete(self, vm_hostname):
-        """Delete domU from the database"""
-
-        cursor = self.dbconn.cursor()
-        query = "DELETE FROM nodes WHERE name='%s';" %(vm_hostname)
-        cursor.execute(query)
 
     def xen_connect(self, host, abort_on_failure=True):
         """Establish connection to xen daemon"""
@@ -306,10 +261,6 @@ class VMNode(Application):
             f.close()
             os.remove(cfg_file)
 
-            # write user to the database
-            if self.args.database:
-                self.db_insert(vm_hostname)
-
     def shutdown(self):
         """Shutdown the desired number of domUs"""
 
@@ -337,10 +288,6 @@ class VMNode(Application):
                 error("Error while shutting down %s" %(vm_hostname))
                 error(exception)
 
-            # delete node entry from database
-            if self.args.database:
-                self.db_delete(vm_hostname)
-
     def destroy(self):
         """Destroy the desired number of domUs"""
 
@@ -367,10 +314,6 @@ class VMNode(Application):
             except CommandFailed, exception:
                 error("Error while destroying %s" %(vm_hostname))
                 error(exception)
-
-            # delete node entry from database
-            if self.args.database:
-                self.db_delete(vm_hostname)
 
     def list(self):
         """Show information about domOs/domUs"""
@@ -437,18 +380,18 @@ class VMNode(Application):
             sorted_keyset = vm_all.keys()
             sorted_keyset.sort(vmr_compare)
 
-            # get domU ownerships:
-            if self.args.database:
-                nodeset = ",".join(map(lambda s: "'"+s+"'", sorted_keyset))
-                if nodeset != "":
-                    cursor = self.dbconn.cursor()
-                    cursor.execute("SELECT nodes.name,created_by "\
-                            "FROM nodes,nodes_vmesh "\
-                            "WHERE nodes.nodeID=nodes_vmesh.nodeID "\
-                                "AND nodes.name IN (%s)" %(nodeset))
-                    for row in cursor.fetchall():
-                        (key, value) = row
-                        vm_all[key]["user"] = value
+#            # get domU ownerships:
+#            if self.args.database:
+#                nodeset = ",".join(map(lambda s: "'"+s+"'", sorted_keyset))
+#                if nodeset != "":
+#                    cursor = self.dbconn.cursor()
+#                    cursor.execute("SELECT nodes.name,created_by "\
+#                            "FROM nodes,nodes_vmesh "\
+#                            "WHERE nodes.nodeID=nodes_vmesh.nodeID "\
+#                                "AND nodes.name IN (%s)" %(nodeset))
+#                    for row in cursor.fetchall():
+#                        (key, value) = row
+#                        vm_all[key]["user"] = value
 
             # print domU informations
             print "Name          Host      User                 Mem State  Time"
@@ -460,12 +403,6 @@ class VMNode(Application):
                         entry["maxmem"], entry["state"], entry["cpu_time"])
 
     def run(self):
-        # establish database connection
-        if self.args.database:
-            dbconn = self.args.database
-            self.db_connect(host=dbconn[0], db=dbconn[1], user=dbconn[2],
-                    passwd=dbconn[3])
-
         # run command (create,shutdown,destroy,list)
         eval("self.%s()" %(self.args.action))
 
