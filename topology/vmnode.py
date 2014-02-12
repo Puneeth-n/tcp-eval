@@ -288,16 +288,28 @@ class VMNode(Application):
     def list(self):
         """Show information about domOs/domUs"""
 
-        # helper function
-        def vmr_compare(x, y):
-            # only compare numerical part, works for our purpose
-            x_nr = int(filter(lambda c: c.isdigit(), x))
-            y_nr = int(filter(lambda c: c.isdigit(), y))
-            return cmp(x_nr, y_nr)
-#
-#        # must be root
-#        requireroot()
-#
+        # must be root
+        requireroot()
+        
+        # create XEN command
+        cmd = "xl list"
+        
+        # list domain information
+        try:
+            info("Gathering information of the running Domains")
+            ret = call(cmd)
+        except CommandFailed, exception:
+            error("An error occured during gathering information ")
+            error(exception)
+        
+#        for line in ret.splitlines():
+#        	
+#        # helper function
+#        def vmr_compare(x, y):
+#            # only compare numerical part, works for our purpose
+#            x_nr = int(filter(lambda c: c.isdigit(), x))
+#            y_nr = int(filter(lambda c: c.isdigit(), y))
+#            return cmp(x_nr, y_nr)
 #        # show information about all dom0s
 #        if self.args.listing == "dom0" or self.args.listing == "both":
 #            print "Host           #Nodes     Mem   VCPUs"
@@ -363,14 +375,14 @@ class VMNode(Application):
 #                        (key, value) = row
 #                        vm_all[key]["user"] = value
 #
-#            # print domU informations
-#            print "Name          Host      User                 Mem State  Time"
-#            print "------------------------------------------------------------------------------------"
-#            for key in sorted_keyset:
-#                entry = vm_all[key]
-#                print "%s %s %s %3s %6s %s" %(entry["name"].ljust(13),\
-#                        entry["host"].ljust(9), entry["user"].ljust(20),\
-#                        entry["maxmem"], entry["state"], entry["cpu_time"])
+#        # print domU informations
+#        print "Name          Host      User                 Mem State  Time"
+#        print "------------------------------------------------------------------------------------"
+#        for key in sorted_keyset:
+#            entry = vm_all[key]
+#            print "%s %s %s %3s %6s %s" %(entry["name"].ljust(13),\
+#                    entry["host"].ljust(9), entry["user"].ljust(20),\
+#                    entry["maxmem"], entry["state"], entry["cpu_time"])
 
     def run(self):
         # run command (create,shutdown,destroy,list)
