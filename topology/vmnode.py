@@ -203,7 +203,7 @@ class VMNode(Application):
 
             # test if domU is already running
             try:
-                cmd = ["ping", "-c1", vm_hostname]
+                cmd = ["xl", "list", vm_hostname]
                 execute(cmd, shell=False)
                 warn("%s seems to be already running." %(vm_hostname))
                 continue
