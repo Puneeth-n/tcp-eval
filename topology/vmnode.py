@@ -81,13 +81,13 @@ class VMNode(Application):
                 parents=[shared_parser], help="create multiple XEN domUs "\
                         "simultaneously")
         parser_create.add_argument("-o", "--root", metavar="PATH",
-                action="store", default="./root", help = "root file system "\
+                action="store", default="/dev/nfs nfsroot=192.168.0.1:/usr/local/muclab/image/debian-wheezy ro boot=nfs root-ro=aufs ro", help = "root file system "\
                         "for domU (default: %(default)s)")
         parser_create.add_argument("-k", "--kernel", metavar="FILE",
-                action="store",  default = "./vmlinuz", help = "kernel for "\
+                action="store",  default = "/mnt/boot/kernel/vmlinuz-3.13.0.david+", help = "kernel for "\
                         "domU (default: %(default)s)")
         parser_create.add_argument("-i", "--initrd", metavar="FILE",
-                action="store", default="./initrd.img", help="initial "\
+                action="store", default="/mnt/boot/initrd/initrd.img-3.13.0.david+", help="initial "\
                         "ramdisk for domU (default: %(default)s)")
         parser_create.add_argument("-m", "--memory", metavar="#",
                 action="store", type=int, default=128, help="amount of RAM "\
@@ -264,13 +264,15 @@ class VMNode(Application):
                     ramdisk = '%s'
                     kernel  = '%s'
                     memory  = %s
+                    boot    = 'n'
                     cpus    = '2-15'
-                    root    = '/dev/ram0 console=hvc0'
-                    vif     = ['mac=00:16:3E:00:%02x:%02x', 'bridge=br0']
-                    extra   = 'id=default image=%s"""
+                    root    = '%s'
+                    dhcp    = 'on'
+                    vif     = ['mac=00:16:3E:00:%02x:%02x, bridge=br0']
+                    extra   = 'xencons=tty root-ro=aufs'"""
                     %(vm_hostname, self.args.initrd, self.args.kernel,
-                        self.args.memory, first_byte, rest_2bytes,
-                        self.args.root))
+                        self.args.memory, self.args.root, 
+                        first_byte, rest_2bytes))
 
             # dry run - only print config file and continue
             if self.args.dry_run:
@@ -282,15 +284,15 @@ class VMNode(Application):
             # write config into a file
             cfg_fd, cfg_file = tempfile.mkstemp(suffix = "-%s.cfg"
                     %(vm_hostname))
-            f = open(cfg_fd, "w")
+            f = open(cfg_file, "w")
             f.write(xen_config)
             f.flush()
 
             # create XEN command
             if self.args.console:
-                cmd = "xm create -c -f %s" %(cfg_file)
+                cmd = "xl create -c -f %s" %(cfg_file)
             else:
-                cmd = "xm create -f %s" %(cfg_file)
+                cmd = "xl create -f %s" %(cfg_file)
 
             # start VM
             try:
@@ -302,7 +304,7 @@ class VMNode(Application):
 
             # close and remove config file
             f.close()
-            os.remove(cfg_file)
+            #os.remove(cfg_file)
 
             # write user to the database
             if self.args.database:
