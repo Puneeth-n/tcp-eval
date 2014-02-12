@@ -20,7 +20,6 @@ import sys
 import argparse
 import textwrap
 import tempfile
-import xmlrpclib
 import socket
 from logging import info, debug, warn, error
 
@@ -33,10 +32,7 @@ class VMNode(Application):
 
     def __init__(self):
         """Creates a new VMNode object"""
-
-        # database and xend connection
-        self.xenconn = None
-
+        
         # other object variables
         self.__vm_ids = None
 
@@ -158,32 +154,6 @@ class VMNode(Application):
             # way, we convert the string into a list
             if type(self.args.host) == str:
                 self.args.host = str(self.args.host).split()
-
-    def xen_connect(self, host, abort_on_failure=True):
-        """Establish connection to xen daemon"""
-
-        try:
-            self.xenconn = xmlrpclib.Server('http://%s:8006/' %(host))
-        except socket.error, exception:
-            error_msg = "Could not connect to XEN daemon"
-            if abort_on_failure:
-                error("%s: %s. Exit" %(error_msg, exception))
-                sys.exit(1)
-            else:
-                warn("%s: %s. Continue..." %(error_msg, exception))
-
-    def xen_getDomains(self, a, b, abort_on_failure=True):
-        """Return all hostet domains"""
-
-        try:
-            return self.xenconn.domains(a, b)
-        except socket.error, exception:
-            error_msg = "Could not retrieve XEN domains from the XEN daemon"
-            if abort_on_failure:
-                error("%s: %s. Exit" %(error_msg, exception))
-                sys.exit(1)
-            else:
-                warn("%s: %s. Continue..." %(error_msg, exception))
 
     def create(self):
         """Start the desired number of domUs"""
@@ -324,62 +294,62 @@ class VMNode(Application):
             x_nr = int(filter(lambda c: c.isdigit(), x))
             y_nr = int(filter(lambda c: c.isdigit(), y))
             return cmp(x_nr, y_nr)
-
-        # must be root
-        requireroot()
-
-        # show information about all dom0s
-        if self.args.listing == "dom0" or self.args.listing == "both":
-            print "Host           #Nodes     Mem   VCPUs"
-            print "-------------------------------------"
-
-            info("Collecting stats...")
-            for host in self.args.host:
-                # connect to xen on 'host' and get domains
-                self.xen_connect(host, False)
-                domains = self.xen_getDomains(True, False, False)
-
-                # in case of an error, skip this host
-                if not domains: continue
-
-                # print dom0 informations
-                print "%s \t %s \t %s \t %s" %(host, len(domains) - 1, \
-                        domains[0][11][1], domains[0][5][1])
-
-        # show information about all domUs
-        if self.args.listing == "domU" or self.args.listing == "both":
-            vm_all = dict()
-
-            info("Collecting stats...")
-            for host in self.args.host:
-                # connect to xen on 'host' and get domains
-                self.xen_connect(host, False)
-                domains = self.xen_getDomains(True, False, False)
-
-                # in case of an error, skip this host
-                if not domains: continue
-
-                # extend list of all vmrouters by new ones
-                for entry in domains:
-                    d = dict()
-                    # skip first elem in entry
-                    for elem in entry[1:]:
-                        (key, value) = elem
-                        d[key] = value
-                    # add server name to entry
-                    d["host"] = host
-                    # skip dom0
-                    if d["domid"] == 0: continue
-                    # initialize user field
-                    d["user"] = "None"
-                    # use domain name as key
-                    key = d["name"]
-                    vm_all[key] = d
-
-            #sort by hostname
-            sorted_keyset = vm_all.keys()
-            sorted_keyset.sort(vmr_compare)
-
+#
+#        # must be root
+#        requireroot()
+#
+#        # show information about all dom0s
+#        if self.args.listing == "dom0" or self.args.listing == "both":
+#            print "Host           #Nodes     Mem   VCPUs"
+#            print "-------------------------------------"
+#
+#            info("Collecting stats...")
+#            for host in self.args.host:
+#                # connect to xen on 'host' and get domains
+#                self.xen_connect(host, False)
+#                domains = self.xen_getDomains(True, False, False)
+#
+#                # in case of an error, skip this host
+#                if not domains: continue
+#
+#                # print dom0 informations
+#                print "%s \t %s \t %s \t %s" %(host, len(domains) - 1, \
+#                        domains[0][11][1], domains[0][5][1])
+#
+#        # show information about all domUs
+#        if self.args.listing == "domU" or self.args.listing == "both":
+#            info("Collecting stats...")
+#            
+#            vm_all = dict()
+#            for host in self.args.host:
+#                # connect to xen on 'host' and get domains
+#                self.xen_connect(host, False)
+#                domains = self.xen_getDomains(True, False, False)
+#
+#                # in case of an error, skip this host
+#                if not domains: continue
+#
+#                # extend list of all vmrouters by new ones
+#                for entry in domains:
+#                    d = dict()
+#                    # skip first elem in entry
+#                    for elem in entry[1:]:
+#                        (key, value) = elem
+#                        d[key] = value
+#                    # add server name to entry
+#                    d["host"] = host
+#                    # skip dom0
+#                    if d["domid"] == 0: continue
+#                    # initialize user field
+#                    d["user"] = "None"
+#                    # use domain name as key
+#                    key = d["name"]
+#                    vm_all[key] = d
+#
+#            #sort by hostname
+#            sorted_keyset = vm_all.keys()
+#            sorted_keyset.sort(vmr_compare)
+#
 #            # get domU ownerships:
 #            if self.args.database:
 #                nodeset = ",".join(map(lambda s: "'"+s+"'", sorted_keyset))
@@ -392,15 +362,15 @@ class VMNode(Application):
 #                    for row in cursor.fetchall():
 #                        (key, value) = row
 #                        vm_all[key]["user"] = value
-
-            # print domU informations
-            print "Name          Host      User                 Mem State  Time"
-            print "------------------------------------------------------------------------------------"
-            for key in sorted_keyset:
-                entry = vm_all[key]
-                print "%s %s %s %3s %6s %s" %(entry["name"].ljust(13),\
-                        entry["host"].ljust(9), entry["user"].ljust(20),\
-                        entry["maxmem"], entry["state"], entry["cpu_time"])
+#
+#            # print domU informations
+#            print "Name          Host      User                 Mem State  Time"
+#            print "------------------------------------------------------------------------------------"
+#            for key in sorted_keyset:
+#                entry = vm_all[key]
+#                print "%s %s %s %3s %6s %s" %(entry["name"].ljust(13),\
+#                        entry["host"].ljust(9), entry["user"].ljust(20),\
+#                        entry["maxmem"], entry["state"], entry["cpu_time"])
 
     def run(self):
         # run command (create,shutdown,destroy,list)
