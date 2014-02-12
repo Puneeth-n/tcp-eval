@@ -153,7 +153,7 @@ class VMNode(Application):
         # for command "create" only
         if self.args.action == "create":
             # cannot attach console if we start multiple VMs
-            if self.args.console and self.args.do_create > 1:
+            if self.args.console and len(self.args.vm_ids) > 1:
                 warn("Starting more than VMs with attached console is almost "\
                         "certainly not what you want. Console option is "\
                         "deactivated")
@@ -304,7 +304,7 @@ class VMNode(Application):
 
             # close and remove config file
             f.close()
-            #os.remove(cfg_file)
+            os.remove(cfg_file)
 
             # write user to the database
             if self.args.database:
@@ -327,7 +327,7 @@ class VMNode(Application):
             vm_hostname = "%s%i" %(self.args.prefix, vm_id)
 
             # create XEN command
-            cmd = "xm shutdown %s" %(vm_hostname)
+            cmd = "xl shutdown %s" %(vm_hostname)
 
             # shutdown vm
             try:
@@ -358,7 +358,7 @@ class VMNode(Application):
             vm_hostname = "%s%i" %(self.args.prefix, vm_id)
 
             # create XEN command
-            cmd = "xm destroy %s" %(vm_hostname)
+            cmd = "xl destroy %s" %(vm_hostname)
 
             # shutdown vm
             try:
