@@ -222,7 +222,7 @@ class BuildVmesh(Application):
 
             # get linkinfos
             # offset has to be added to every host
-            offset = self.options.offset
+            offset = self.args.offset
             host = int(lm.group('host')) + offset
             reaches = set()
             for m in reaches_re.findall(lm.group('reaches')):
@@ -285,7 +285,7 @@ class BuildVmesh(Application):
 
     def gre_ip(self, hostnum, mask = False, offset = 0):
         """Gets the gre ip for host with number "hostnum" """
-        ip_address_prefix = self.options.ipprefix
+        ip_address_prefix = self.args.ipprefix
 
         if mask:
             return "%s.%s.%s/16" %( ip_address_prefix, ((hostnum - 1) / 254 + (20 * offset)) % 254, (hostnum - 1) % 254 + 1 )
@@ -295,7 +295,7 @@ class BuildVmesh(Application):
 
     def gre_net(self, mask = True):
         """Gets the gre network address"""
-        ip_address_prefix = self.options.ipprefix
+        ip_address_prefix = self.args.ipprefix
 
         if mask:
             return "%s.0.0/16" %( ip_address_prefix )
@@ -304,7 +304,7 @@ class BuildVmesh(Application):
 
     def gre_broadcast(self, mask = True):
         """Gets the gre broadcast network address"""
-        ip_address_prefix = self.options.ipprefix
+        ip_address_prefix = self.args.ipprefix
         return "%s.255.255" %( ip_address_prefix )
 
     def gre_multicast(self, multicast, interface):
@@ -321,8 +321,8 @@ class BuildVmesh(Application):
         gre_broadcast = self.gre_broadcast(mask = True)
 
         try:
-            iface = self.options.interface
-            gre_multicast = self.gre_multicast(self.options.multicast, iface)
+            iface = self.args.interface
+            gre_multicast = self.gre_multicast(self.args.multicast, iface)
 
             info("setting up GRE Broadcast tunnel for %s" % hostnum )
             execute('ip tunnel del %s' % iface, True, False)
@@ -349,7 +349,7 @@ class BuildVmesh(Application):
 
     def setup_dns(self):
         # update dns
-        iface = self.options.interface
+        iface = self.args.interface
         hostnum = self.node.getNumber()
         address = self.gre_ip(hostnum, mask=False)
 
@@ -373,12 +373,12 @@ class BuildVmesh(Application):
         hostnum = self.node.getNumber()
         peers = self.conf.get(hostnum, set())
         prefix = self.node.getHostnamePrefix()
-        parent_num = self.net_num(self.options.interface) + 1
+        parent_num = self.net_num(self.args.interface) + 1
 
         # Add qdisc
         try:
-            if self.options.multiple_topology or self.options.multiple_topology_reset:
-                if self.options.multiple_topology_reset:
+            if self.args.multiple_topology or self.args.multiple_topology_reset:
+                if self.args.multiple_topology_reset:
                     execute("tc qdisc del dev %s root; " % iface +
                             "tc qdisc add dev %s root handle 1: htb default 1100;" % iface
                             , True)
@@ -401,8 +401,8 @@ class BuildVmesh(Application):
             try:
                 if self.linkinfo.has_key(hostnum) and self.linkinfo[hostnum].has_key(p) and self.linkinfo[hostnum][p]['rate'] != '':
                     rate = self.linkinfo[hostnum][p]['rate']
-                elif self.options.rate:
-                    rate = self.options.rate
+                elif self.args.rate:
+                    rate = self.args.rate
                 else:
                     continue
 
@@ -411,7 +411,7 @@ class BuildVmesh(Application):
                 info("Limiting rate of link %s -> %s to %s mbit" % (hostnum,p,rate))
 
                 netem_str = ''
-                if self.options.multiple_topology or self.options.multiple_topology_reset:
+                if self.args.multiple_topology or self.args.multiple_topology_reset:
                     #TODO: Can lead to problems if one destionation is reachable from serveral devices!
                     #Need to check for such links and combine them to one
                     execute(self.shapecmd_multiple % {
@@ -456,8 +456,8 @@ class BuildVmesh(Application):
         hostnum = self.node.getNumber()
         peers = self.conf.get(hostnum, set())
         prefix = self.node.getHostnamePrefix()
-        mcast = self.options.multicast
-        iface = self.options.interface
+        mcast = self.args.multicast
+        iface = self.args.interface
         gre_multicast = self.gre_multicast(mcast, iface)
 
         mesh_name = "mesh_gre_%s_in" %(iface)
@@ -529,7 +529,7 @@ class BuildVmesh(Application):
             raise
 
     def setup_routing(self):
-        iface   = self.options.interface
+        iface   = self.args.interface
         hostnum = self.node.getNumber()
 
         # disable send_redirects and accept redirects
@@ -560,8 +560,8 @@ class BuildVmesh(Application):
                 host_ip = self.gre_ip(host, mask = False, offset = i)
 
                 cmd = ["ip", "route", "replace", host_ip]
-                if self.options.multipath:
-                    for i in range(min(len(paths),self.options.maxpath)):
+                if self.args.multipath:
+                    for i in range(min(len(paths),self.args.maxpath)):
                         nexthop = self.gre_ip(paths[i][0], mask=False)
                         cmd += ["nexthop", "via", nexthop, "dev", iface]
                 else:
@@ -576,8 +576,8 @@ class BuildVmesh(Application):
 
                 # to have more control over multipath routes, add entries to distinct
                 # routing tables
-                if self.options.multipath:
-                    for i in range(min(len(paths),self.options.maxpath)):
+                if self.args.multipath:
+                    for i in range(min(len(paths),self.args.maxpath)):
                         nexthop = self.gre_ip(paths[i][0], mask=False)
                         table = self._rtoffset+i
                         cmd  = ["ip", "route", "replace", host_ip]
@@ -590,8 +590,8 @@ class BuildVmesh(Application):
                             raise
 
     def setup_user_helper(self):
-        if self.options.userscripts:
-            cmd = ["%s/%s" %(self.options.userscriptspath, self.node.getHostname())]
+        if self.args.userscripts:
+            cmd = ["%s/%s" %(self.args.userscriptspath, self.node.getHostname())]
             if os.path.isfile(cmd[0]):
                 info("Executing user-provided helper program...")
                 try:
@@ -607,54 +607,54 @@ class BuildVmesh(Application):
         """Main method of the Buildmesh object"""
 
         # Apply settings on remote hosts
-        if self.options.remote:
+        if self.args.remote:
             requireNOroot()
 
             # don't print graph option --quiet was given
-            if self.options.verbose:
+            if self.args.verbose:
                 self.visualize(self.conf)
             # stop here if it's a dry run
-            if self.options.dry_run:
+            if self.args.dry_run:
                 sys.exit(0)
 
             # call script on all vmrouter involved
             for host in self.conf.keys():
                 h = "vmrouter%s" % host
                 info("Configuring host %s" % h)
-                cmd = ["ssh", h, "sudo", "/usr/local/sbin/um_vmesh","-i", self.options.interface, "-l", "-"]
-                if self.options.debug:
+                cmd = ["ssh", h, "sudo", "/usr/local/sbin/um_vmesh","-i", self.args.interface, "-l", "-"]
+                if self.args.debug:
                     cmd.append("--debug")
 
-                if self.options.staticroutes:
+                if self.args.staticroutes:
                     cmd.append("--staticroutes")
 
-                if self.options.multipath:
+                if self.args.multipath:
                     cmd.append("--multipath")
                     cmd.append("--maxpath")
-                    cmd.append(str(self.options.maxpath))
+                    cmd.append(str(self.args.maxpath))
 
-                if self.options.rate:
+                if self.args.rate:
                     cmd.append("-R")
-                    cmd.append(self.options.rate)
+                    cmd.append(self.args.rate)
 
-                if self.options.userscripts:
+                if self.args.userscripts:
                     cmd.append("-u")
 
-                if self.options.userscriptspath:
-                    cmd.append("--userscripts-path=%s" %self.options.userscriptspath)
+                if self.args.userscriptspath:
+                    cmd.append("--userscripts-path=%s" %self.args.userscriptspath)
 
-                if self.options.offset:
+                if self.args.offset:
                     cmd.append("-o")
-                    cmd.append(str(self.options.offset))
+                    cmd.append(str(self.args.offset))
 
-                if self.options.ipprefix > 0:
+                if self.args.ipprefix > 0:
                      cmd.append("--ipprefix");
-                     cmd.append(str(self.options.ipprefix));
+                     cmd.append(str(self.args.ipprefix));
 
-                if self.options.multiple_topology:
+                if self.args.multiple_topology:
                     cmd.append("-e")
 
-                if self.options.multiple_topology_reset:
+                if self.args.multiple_topology_reset:
                     cmd.append("-E")
 
                 debug("Executing: %s", cmd)
@@ -679,7 +679,7 @@ class BuildVmesh(Application):
             info("Setting up traffic shaping ... ")
             self.setup_trafficcontrol()
 
-            if self.options.staticroutes:
+            if self.args.staticroutes:
                 info("Setting up static routing...")
                 self.setup_routing()
 
