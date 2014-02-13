@@ -101,8 +101,10 @@ class BuildVmesh(Application):
                         "to all node IDs in the config file")
         self.parser.add_argument("-u", "--user-scripts", metavar="PATH",
                 action="store", nargs="?", const="./config/vmnet-helper",
+                dest="user_scripts",
                 help="Execute user scripts for every node (default: %(const)s)")
         self.parser.add_argument("-s", "--static-routes", action="store_true",
+                                 dest="static_routes",
                 default=False, help="Setup static routing according to "\
                         "topology")
         self.parser.add_argument("-p", "--multipath", metavar="NUM",
@@ -112,8 +114,8 @@ class BuildVmesh(Application):
         self.parser.add_argument("-R", "--rate", metavar="RATE", action="store",
                 help="Rate limit in mbps")
         self.parser.add_argument("-n", "--ip-prefix", metavar="PRE",
-                action="store", default="172.16", help="Use to select "\
-                        "different IP address ranges (default: %(default)s)")
+                action="store", default="172.16", dest="ip_prefix", 
+                help="Use to select different IP address ranges (default: %(default)s)")
         self._topology_group=self.parser.add_mutually_exclusive_group()
         self._topology_group.add_argument("-e", "--multiple-topology",
                 action="store_true", default=False, dest="multiple_topology",
@@ -126,8 +128,8 @@ class BuildVmesh(Application):
                         "deploy serveral topolgies at once and reset the "\
                         "root node")
         self.parser.add_argument("-y", "--dry-run", action="store_true",
-                default=False, help="Test the config only without setting it "\
-                        "up")
+                default=False, dest="dry_run",
+                help="Test the config only without setting it up")
 
     def apply_options(self):
         """Set the options for the BuildVmesh object"""
@@ -285,7 +287,7 @@ class BuildVmesh(Application):
 
     def gre_ip(self, hostnum, mask = False, offset = 0):
         """Gets the gre ip for host with number "hostnum" """
-        ip_address_prefix = self.args.ipprefix
+        ip_address_prefix = self.args.ip_prefix
 
         if mask:
             return "%s.%s.%s/16" %( ip_address_prefix, ((hostnum - 1) / 254 + (20 * offset)) % 254, (hostnum - 1) % 254 + 1 )
@@ -295,7 +297,7 @@ class BuildVmesh(Application):
 
     def gre_net(self, mask = True):
         """Gets the gre network address"""
-        ip_address_prefix = self.args.ipprefix
+        ip_address_prefix = self.args.ip_prefix
 
         if mask:
             return "%s.0.0/16" %( ip_address_prefix )
@@ -304,7 +306,7 @@ class BuildVmesh(Application):
 
     def gre_broadcast(self, mask = True):
         """Gets the gre broadcast network address"""
-        ip_address_prefix = self.args.ipprefix
+        ip_address_prefix = self.args.ip_prefix
         return "%s.255.255" %( ip_address_prefix )
 
     def gre_multicast(self, multicast, interface):
@@ -590,8 +592,8 @@ class BuildVmesh(Application):
                             raise
 
     def setup_user_helper(self):
-        if self.args.userscripts:
-            cmd = ["%s/%s" %(self.args.userscriptspath, self.node.getHostname())]
+        if self.args.user_scripts:
+            cmd = ["%s/%s" %(self.args.user_scripts, self.node.getHostname())]
             if os.path.isfile(cmd[0]):
                 info("Executing user-provided helper program...")
                 try:
@@ -611,7 +613,7 @@ class BuildVmesh(Application):
             requireNOroot()
 
             # don't print graph option --quiet was given
-            if self.args.verbose:
+            if self.args.verbose or self.args.debug:
                 self.visualize(self.conf)
             # stop here if it's a dry run
             if self.args.dry_run:
@@ -625,7 +627,7 @@ class BuildVmesh(Application):
                 if self.args.debug:
                     cmd.append("--debug")
 
-                if self.args.staticroutes:
+                if self.args.static_routes:
                     cmd.append("--staticroutes")
 
                 if self.args.multipath:
@@ -637,19 +639,16 @@ class BuildVmesh(Application):
                     cmd.append("-R")
                     cmd.append(self.args.rate)
 
-                if self.args.userscripts:
-                    cmd.append("-u")
-
-                if self.args.userscriptspath:
-                    cmd.append("--userscripts-path=%s" %self.args.userscriptspath)
+                if self.args.user_scripts:
+                    cmd.append("--userscripts-path=%s" %self.args.user_scripts)
 
                 if self.args.offset:
                     cmd.append("-o")
                     cmd.append(str(self.args.offset))
 
-                if self.args.ipprefix > 0:
+                if self.args.ip_prefix > 0:
                      cmd.append("--ipprefix");
-                     cmd.append(str(self.args.ipprefix));
+                     cmd.append(str(self.args.ip_prefix));
 
                 if self.args.multiple_topology:
                     cmd.append("-e")
