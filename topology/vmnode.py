@@ -16,6 +16,7 @@
 
 # python imports
 import os
+import re
 import sys
 import argparse
 import textwrap
@@ -57,7 +58,7 @@ class VMNode(Application):
                 action="store", default="localhost", help="execute command "\
                         "on dom0 '%(metavar)s' (default: %(default)s)")
         shared_parser.add_argument("-p", "--prefix", metavar="PRE",
-                action="store", default="vmnode", help="use '%(metavar)s' as "\
+                action="store", default="xen-128-", help="use '%(metavar)s' as "\
                         "prefix for domU's hostname (default: %(default)s). "\
                         "As suffix the domU ID will be used")
         shared_parser.add_argument("-r", "--range", action="store_true",
@@ -69,7 +70,7 @@ class VMNode(Application):
                 parents=[shared_parser], help="create multiple XEN domUs "\
                         "simultaneously")
         parser_create.add_argument("-o", "--root", metavar="PATH",
-                action="store", default="/dev/nfs nfsroot=192.168.0.1:/usr/local/muclab/image/debian-wheezy ro boot=nfs root-ro=aufs ro", help = "root file system "\
+                action="store", default="/dev/nfs nfsroot=192.168.0.1:/usr/local/muclab/image/debian-wheezy ro boot=nfs", help = "root file system "\
                         "for domU (default: %(default)s)")
         parser_create.add_argument("-k", "--kernel", metavar="FILE",
                 action="store",  default = "/mnt/boot/kernel/vmlinuz-3.13.0.david+", help = "kernel for "\
@@ -107,6 +108,15 @@ class VMNode(Application):
                 action="store", default="localhost", help="hosts (dom0s) "\
                         "on which the command will be executed "\
                         "(default: %(default)s)")
+        parser_list.add_argument("-p", "--prefix", metavar="PRE",
+                action="store", default="xen-128-", help="use '%(metavar)s' as "\
+                        "prefix for domU's hostname (default: %(default)s). "\
+                        "As suffix the domU ID will be used")
+        parser_list.add_argument("-i", "--ip-prefix", metavar="PRE",
+                action="store", default="192.168.128.",dest="ip_prefix", 
+                help="use '%(metavar)s' as "\
+                        "prefix for domU's hostname (default: %(default)s). "\
+                        "As suffix the domU ID will be used")
 
     def apply_options(self):
         """Configure XEN object based on the options form the argparser.
@@ -173,7 +183,7 @@ class VMNode(Application):
 
             # test if domU is already running
             try:
-                cmd = ["xl", "list", vm_hostname]
+                cmd = ["ping",  vm_hostname , "-w 1"]
                 execute(cmd, shell=False)
                 warn("%s seems to be already running." %(vm_hostname))
                 continue
@@ -194,7 +204,7 @@ class VMNode(Application):
                     root    = '%s'
                     dhcp    = 'on'
                     vif     = ['mac=00:16:3E:00:%02x:%02x, bridge=br0']
-                    extra   = 'xencons=tty root-ro=aufs'"""
+                    extra   = 'xencons=tty root-ro=aufs '"""
                     %(vm_hostname, self.args.initrd, self.args.kernel,
                         self.args.memory, self.args.root, 
                         first_byte, rest_2bytes))
@@ -287,21 +297,25 @@ class VMNode(Application):
 
     def list(self):
         """Show information about domOs/domUs"""
+            
+        print "VM-Name".rjust(12) , "IP".rjust(15)
+        
+        stdout = None
 
-        # must be root
-        requireroot()
-        
-        # create XEN command
-        cmd = "xl list"
-        
-        # list domain information
+        # test if domU is already running
         try:
-            info("Gathering information of the running Domains")
-            ret = call(cmd)
-        except CommandFailed, exception:
-            error("An error occured during gathering information ")
-            error(exception)
+            cmd = ["nmap", "%s%i/%i" % (self.args.ip_prefix,1,24),"-sn"]
+            stdout = execute(cmd, shell=False)
+        except CommandFailed,e:
+            error("Something went wrong with the call of nmap!")
+            error(e)
         
+        stdout = stdout[0].split('\n')
+        
+        name = re.findall(r'%s.\b'%self.args.prefix,str(stdout))
+        ip = re.findall(r'%s.\b'%self.args.ip_prefix,str(stdout))
+        for item,address in zip(name,ip):
+            print str(item).rjust(12), str(address).rjust(15)
 #        for line in ret.splitlines():
 #        	
 #        # helper function
