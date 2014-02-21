@@ -22,6 +22,7 @@ import argparse
 import textwrap
 import tempfile
 import socket
+import ConfigParser
 from logging import info, debug, warn, error
 
 # tcp-eval imports
@@ -30,21 +31,29 @@ from common.functions import requireroot, call, execute, CommandFailed
 
 class VMNode(Application):
     """Class to start virtual nodes on the basis of Xen"""
-
+    
     def __init__(self):
         """Creates a new VMNode object"""
         
         # other object variables
         self.__vm_ids = None
 
+        # load config file or generate initial config file
+        self.config = self.make_config()
+        
         # create top-level parser and subparser
         description = textwrap.dedent("""\
                 This program can create/shutdown/destroy an arbitrary number of
                 XEN VMs (domUs) either locally or on a remote XEN host (dom0).
-                Further, it can list all current running VMs in a network
-                together with their respected owner (requires a MySQL
-                database connection).""")
-        Application.__init__(self, description=description)
+                Further, it can list all current running VMs in a network.""")
+        # create a epilog
+        epilog = textwrap.dedent("""\
+                Configuration File: You can generate a initial-configuration file 
+                in the same directory by executing the script with no arguments. In 
+                this configuration file you can specify all the default values 
+                used by this programm. Just delete vmnode.conf if you want to 
+                generate a new initial-configuration file.""")
+        Application.__init__(self, description=description, epilog=epilog)
         
         subparsers = self.parser.add_subparsers(title="subcommands",
                 dest="action", help="additional help")
@@ -55,14 +64,14 @@ class VMNode(Application):
                 help="execute command for domU with ID '%(metavar)s'. The ID "\
                         "will be used as a network-wide unique domU identifier")
         shared_parser.add_argument("-s", "--host", metavar="HOST",
-                action="store", default="localhost", help="execute command "\
+                action="store", default=self.config.get('SharedConf', 'host'), help="execute command "\
                         "on dom0 '%(metavar)s' (default: %(default)s)")
         shared_parser.add_argument("-p", "--prefix", metavar="PRE",
-                action="store", default="xen-128-", help="use '%(metavar)s' as "\
+                action="store", default=self.config.get('SharedConf', 'prefix'), help="use '%(metavar)s' as "\
                         "prefix for domU's hostname (default: %(default)s). "\
                         "As suffix the domU ID will be used")
         shared_parser.add_argument("-r", "--range", action="store_true",
-                default=False, help="interprete the given domU IDs as an 'ID "\
+                default=self.config.getboolean('SharedConf', 'range'), help="interprete the given domU IDs as an 'ID "\
                         "range' from 'id1' to 'id2' (default: %(default)s)")
 
         # create parser for "create" command
@@ -70,17 +79,23 @@ class VMNode(Application):
                 parents=[shared_parser], help="create multiple XEN domUs "\
                         "simultaneously")
         parser_create.add_argument("-o", "--root", metavar="PATH",
-                action="store", default="/dev/nfs nfsroot=192.168.0.1:/usr/local/muclab/image/debian-wheezy ro boot=nfs", help = "root file system "\
+                action="store", default=self.config.get('Create', 'root'), help = "root file system "\
                         "for domU (default: %(default)s)")
         parser_create.add_argument("-k", "--kernel", metavar="FILE",
-                action="store",  default = "/mnt/boot/kernel/vmlinuz-3.13.0.david+", help = "kernel for "\
+                action="store",  default =self.config.get('Create', 'kernel'), help = "kernel for "\
                         "domU (default: %(default)s)")
         parser_create.add_argument("-i", "--initrd", metavar="FILE",
-                action="store", default="/mnt/boot/initrd/initrd.img-3.13.0.david+", help="initial "\
+                action="store", default=self.config.get('Create', 'initrd'), help="initial "\
                         "ramdisk for domU (default: %(default)s)")
         parser_create.add_argument("-m", "--memory", metavar="#",
-                action="store", type=int, default=128, help="amount of RAM "\
+                action="store", type=int, default=self.config.getint('Create', 'memory'), help="amount of RAM "\
                         "in MB to allocate to domU (default: %(default)s)")
+        parser_create.add_argument("-b", "--boot", metavar="(c|d|n)", choices=("c", "d", "n"),
+                action="store", default=self.config.get('Create', 'boot'), help="sets the boot "\
+                        "device which is \"c\" for cd-rom, \"d\" for disk and \"n\" for network (default: %(default)s)")
+        parser_create.add_argument("-z", "--cpus", metavar="RANGE",
+                action="store", default=self.config.get('Create', 'cpus'), help="list of which "\
+                        "cpus the the guest is allowed to run on (default: %(default)s)")
         create_group = parser_create.add_mutually_exclusive_group()
         create_group.add_argument("-c", "--console", action="store_true",
                 default=False, help="attaches to domU console (xl -c)")
@@ -104,20 +119,44 @@ class VMNode(Application):
                 choices=("dom0", "domU", "both"), default="dom0",
                 help="which node information will be show (default: "\
                         "%(default)s)")
-        parser_list.add_argument("-s", "--host", metavar="HOST", nargs="+",
-                action="store", default="localhost", help="hosts (dom0s) "\
-                        "on which the command will be executed "\
-                        "(default: %(default)s)")
-        parser_list.add_argument("-p", "--prefix", metavar="PRE",
-                action="store", default="xen-128-", help="use '%(metavar)s' as "\
-                        "prefix for domU's hostname (default: %(default)s). "\
-                        "As suffix the domU ID will be used")
         parser_list.add_argument("-i", "--ip-prefix", metavar="PRE",
                 action="store", default="192.168.128.",dest="ip_prefix", 
                 help="use '%(metavar)s' as "\
                         "prefix for domU's hostname (default: %(default)s). "\
                         "As suffix the domU ID will be used")
 
+    def make_config(self):
+        Config = ConfigParser.ConfigParser()
+        if os.path.isfile('vmnode.conf'):
+            Config.read('vmnode.conf')
+        else:
+            cfgfile = open('vmnode.conf','w+')
+            
+            Config.add_section('SharedConf')
+            Config.set('SharedConf','host','localhost')
+            Config.set('SharedConf','prefix','xen-128-')
+            Config.set('SharedConf','range',False)
+            
+            Config.add_section('Create')
+            Config.set('Create','root','/dev/nfs nfsroot=192.168.0.1:/usr/local/muclab/image/debian-wheezy ro boot=nfs')
+            Config.set('Create','kernel','/mnt/boot/kernel/vmlinuz-3.13.0.david+')
+            Config.set('Create','initrd','/mnt/boot/initrd/initrd.img-3.13.0.david+')
+            Config.set('Create','memory',128)
+            Config.set('Create','boot','n')
+            Config.set('Create','cpus','2-15')
+    
+            Config.add_section('List')
+            Config.set('List','listing','dom0')
+            Config.set('List','ip_prefix','192.168.128.')
+            
+            Config.write(cfgfile)
+            Config.readfp(cfgfile)
+            cfgfile.flush()
+            cfgfile.close()
+
+        
+        return Config
+        
     def apply_options(self):
         """Configure XEN object based on the options form the argparser.
         On the given options perform some sanity checks
@@ -199,14 +238,14 @@ class VMNode(Application):
                     ramdisk = '%s'
                     kernel  = '%s'
                     memory  = %s
-                    boot    = 'n'
-                    cpus    = '2-15'
+                    boot    = '%s'
+                    cpus    = '%s'
                     root    = '%s'
                     dhcp    = 'on'
                     vif     = ['mac=00:16:3E:00:%02x:%02x, bridge=br0']
                     extra   = 'xencons=tty root-ro=aufs '"""
                     %(vm_hostname, self.args.initrd, self.args.kernel,
-                        self.args.memory, self.args.root, 
+                        self.args.memory,self.args.boot,self.args.cpus, self.args.root, 
                         first_byte, rest_2bytes))
 
             # dry run - only print config file and continue
