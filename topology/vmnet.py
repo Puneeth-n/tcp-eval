@@ -24,12 +24,12 @@ import argparse
 import string
 import subprocess
 import textwrap
+import getpass
 from logging import info, debug, warn, error, critical
 
 # tcp-eval imports
 from common.application import Application
 from common.functions import *
-#from node import Node, NodeException
 
 class BuildVmesh(Application):
     """Setup GRE tunnels and iptables rules to simulate a mesh network with
@@ -38,13 +38,12 @@ class BuildVmesh(Application):
 
     def __init__(self):
         """Creates a new BuildVmesh object"""
-
         # object variables
-        self.node = None
         self.conf = None
         self.confstr = None
         self.linkinfo = dict()
         self.ipcount = dict()
+        self.confremote = True
         self.shapecmd_multiple = textwrap.dedent("""\
                 tc class add dev %(iface)s parent 1: classid 1:%(parentNr)d%(nr)02d htb rate %(rate)smbit; \
                 tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
@@ -55,6 +54,19 @@ class BuildVmesh(Application):
                 tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
                 match ip protocol 47 0xff flowid 1:%(nr)d \
                 match ip dst %(dst)s""")
+        self.fabfile = textwrap.dedent("""\
+                from fabric.api import *
+
+                @parallel
+                def copy_files():
+                        put('%(config)s','/tmp/%(configname)s')
+                
+                def run_vmnet():
+                        sudo('%(cmdline)s')
+                
+                def clean():
+                        run('rm -f /tmp/*')
+                """)
         self._dnsttl = 300
         self._dnskey = "o2bpYQo1BCYLVGZiafJ4ig=="
         # used routing table ids for multipath
@@ -86,9 +98,13 @@ class BuildVmesh(Application):
                 help="Topology of the virtual network")
         self._setting_group=self.parser.add_mutually_exclusive_group()
         self._setting_group.add_argument("-r", "--remote", action="store_true",
-                default=True, help="Apply settings for all hosts in config "\
+                default=self.confremote, help="Apply settings for all hosts in config "\
                         "(default: %(default)s)")
-        self._setting_group.add_argument("-l", "--local", action="store_false",
+        self._setting_group.add_argument("-t", "--node-prefix", action="store_true",
+                dest="node_prefix", default="xen-128-", 
+                help="Prefix of all nodes in the topology (default: %(default)s)")
+        self._setting_group.add_argument("-l", "--local", action="store_true",
+                default=False,
                 help="Apply just the settings for localhost")
         self.parser.add_argument("-i", "--interface", metavar="IFACE",
                 action="store", default="eth1", help="Interface to use for "\
@@ -114,7 +130,7 @@ class BuildVmesh(Application):
         self.parser.add_argument("-R", "--rate", metavar="RATE", action="store",
                 help="Rate limit in mbps")
         self.parser.add_argument("-n", "--ip-prefix", metavar="PRE",
-                action="store", default="172.16", dest="ip_prefix", 
+                action="store", default="192.168.128.", dest="ip_prefix", 
                 help="Use to select different IP address ranges (default: %(default)s)")
         self._topology_group=self.parser.add_mutually_exclusive_group()
         self._topology_group.add_argument("-e", "--multiple-topology",
@@ -135,7 +151,8 @@ class BuildVmesh(Application):
         """Set the options for the BuildVmesh object"""
 
         Application.apply_options(self)
-        self.conf = self.parse_config(self.args.config_file)
+        if self.args.local:
+            self.conf = self.parse_config(self.args.config_file)
 
     def parse_config(self, file):
         """Returns an hash which maps host number -> set of reachable host numbers
@@ -169,6 +186,11 @@ class BuildVmesh(Application):
            Note that the reachability relation defined by the config file is
            always symmetric.
         """
+        
+        #get the hostname of the machine where the script is executed
+        self.hostname = socket.gethostname()
+        # set the own number according to the hostname
+        self.hostnum = int(re.findall(r'\d+',self.hostname)[0])
 
         # match comments
         comment_re = re.compile('^\s*#')
@@ -290,24 +312,24 @@ class BuildVmesh(Application):
         ip_address_prefix = self.args.ip_prefix
 
         if mask:
-            return "%s.%s.%s/16" %( ip_address_prefix, ((hostnum - 1) / 254 + (20 * offset)) % 254, (hostnum - 1) % 254 + 1 )
+            return "%s.%s/16" %( ip_address_prefix, (hostnum - 1) % 254 + 1 )
         else:
-            return "%s.%s.%s" %( ip_address_prefix, ((hostnum - 1) / 254 + (20 * offset)) % 254, (hostnum - 1) % 254 + 1 )
+            return "%s.%s" %( ip_address_prefix, (hostnum - 1) % 254 + 1 )
 
-
+#necessary ?????
     def gre_net(self, mask = True):
         """Gets the gre network address"""
         ip_address_prefix = self.args.ip_prefix
 
         if mask:
-            return "%s.0.0/16" %( ip_address_prefix )
+            return "%s.0/16" %( ip_address_prefix )
         else:
-            return "%s.16.0.0" %( ip_address_prefix )
-
-    def gre_broadcast(self, mask = True):
+            return "%s.0" %( ip_address_prefix )
+#deleted mask in arguments
+    def gre_broadcast(self):
         """Gets the gre broadcast network address"""
         ip_address_prefix = self.args.ip_prefix
-        return "%s.255.255" %( ip_address_prefix )
+        return "%s.255" %( ip_address_prefix )
 
     def gre_multicast(self, multicast, interface):
         last_ip_block = multicast[multicast.rfind('.') + 1:len(multicast)]
@@ -315,31 +337,48 @@ class BuildVmesh(Application):
 
         new_ip_block = (int(last_ip_block) + net_count - 1)%254 + 1
         return "%s.%s" %(multicast[:multicast.rfind('.')], str(new_ip_block))
+    
+    def getIPaddress(self, device = None):
+        """Get the IP address of a specific device without the netmask. If device
+           is None only the hostname will be looked up.
+        """
+
+        if device is None:
+            name = self.hostname
+        else:
+            name = "%s.%s" %(device, self.hostname)
+            
+        try:
+            address = socket.gethostbyname(name)
+        except socket.gaierror, inst:
+            error("Could not get the ipaddress of %s" % name)
+            error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
+
+        return address
 
     def setup_gre(self):
-        hostnum = self.node.getNumber()
-        public_ip = self.node.getIPaddress(device = None)
-        gre_ip = self.gre_ip(hostnum, mask = True)
-        gre_broadcast = self.gre_broadcast(mask = True)
+        public_ip = self.getIPaddress(device = None)
+        gre_ip = self.gre_ip(self.hostnum, mask = True)
+        gre_broadcast = self.gre_broadcast()
 
         try:
             iface = self.args.interface
-            gre_multicast = self.gre_multicast(self.args.multicast, iface)
+            gre_multicast = self.gre_multicast(self.args.mcast, iface)
 
-            info("setting up GRE Broadcast tunnel for %s" % hostnum )
+            info("setting up GRE Broadcast tunnel for %s" % self.hostnum )
             execute('ip tunnel del %s' % iface, True, False)
             execute('ip tunnel add %(iface)s mode gre local %(public)s remote %(mcast)s ttl 1 \
                      && ip addr add %(gre)s broadcast %(broadcast)s dev %(iface)s \
                      && ip link set %(iface)s up' %
                      {"public": public_ip, "gre": gre_ip, "iface": iface, "broadcast": gre_broadcast,
                       "mcast": gre_multicast}, True)
-            for i in range(1,int(self.ipcount[hostnum])):
-                add_gre_ip = self.gre_ip(hostnum, mask = True, offset = i)
+            for i in range(1,int(self.ipcount[self.hostnum])):
+                add_gre_ip = self.gre_ip(self.hostnum, mask = True, offset = i)
                 info("setting up additional GRE address %s" % add_gre_ip)
                 execute('ip addr add %(gre)s broadcast %(broadcast)s dev %(iface)s' %
                         {'gre': add_gre_ip, 'iface': iface, 'broadcast': gre_broadcast}, True)
         except CommandFailed, inst:
-            error("Setting up GRE tunnel %s (%s, %s) failed." % (hostnum, public_ip, gre_ip))
+            error("Setting up GRE tunnel %s (%s, %s) failed." % (self.hostnum, public_ip, gre_ip))
             error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
 
 
@@ -352,18 +391,18 @@ class BuildVmesh(Application):
     def setup_dns(self):
         # update dns
         iface = self.args.interface
-        hostnum = self.node.getNumber()
-        address = self.gre_ip(hostnum, mask=False)
+        address = self.gre_ip(self.hostnum, mask=False)
+        prefix = self.args.node_prefix
 
-        update_dns1 = "echo \"update delete %s.vmrouter%s.umic-mesh.net A\\nupdate add %s.vmrouter%s.umic-mesh.net %u A %s\\nsend\" | nsupdate -y rndc-key:%s" %(iface, hostnum, iface, hostnum, self._dnsttl, address, self._dnskey)
+        update_dns1 = "echo \"update delete %s.%s%s.umic-mesh.net A\\nupdate add %s.%s%s.umic-mesh.net %u A %s\\nsend\" | nsupdate -y rndc-key:%s" %(iface,prefix, self.hostnum, iface,prefix, self.hostnum, self._dnsttl, address, self._dnskey)
         try:
                 (stdout, stderr) = execute(update_dns1)
         except CommandFailed, inst:
-                error("Updating DNS entry for %s.vmrouter%s failed." % (iface,hostnum))
+                error("Updating DNS entry for %s.%s%s failed." % (iface,prefix,self.hostnum))
                 error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
 
         chaddress = self.chorder(address)
-        update_dns2 = "echo \"update delete %s.in-addr.arpa PTR\\nupdate add %s.in-addr.arpa %u PTR %s.vmrouter%s\\nsend\" | nsupdate -y rndc-key:%s" %(chaddress, chaddress, self._dnsttl, iface, hostnum, self._dnskey)
+        update_dns2 = "echo \"update delete %s.in-addr.arpa PTR\\nupdate add %s.in-addr.arpa %u PTR %s.vmrouter%s\\nsend\" | nsupdate -y rndc-key:%s" %(chaddress, chaddress, self._dnsttl, iface, self.hostnum, self._dnskey)
         try:
                 (stdout, stderr) = execute(update_dns2)
         except CommandFailed, inst:
@@ -372,9 +411,8 @@ class BuildVmesh(Application):
 
     def setup_trafficcontrol(self):
         iface = "eth0"
-        hostnum = self.node.getNumber()
-        peers = self.conf.get(hostnum, set())
-        prefix = self.node.getHostnamePrefix()
+        peers = self.conf.get(self.hostnum, set())
+        prefix = self.args.node_prefix
         parent_num = self.net_num(self.args.interface) + 1
 
         # Add qdisc
@@ -401,8 +439,8 @@ class BuildVmesh(Application):
         i = 0
         for p in sorted(peers):
             try:
-                if self.linkinfo.has_key(hostnum) and self.linkinfo[hostnum].has_key(p) and self.linkinfo[hostnum][p]['rate'] != '':
-                    rate = self.linkinfo[hostnum][p]['rate']
+                if self.linkinfo.has_key(self.hostnum) and self.linkinfo[self.hostnum].has_key(p) and self.linkinfo[self.hostnum][p]['rate'] != '':
+                    rate = self.linkinfo[self.hostnum][p]['rate']
                 elif self.args.rate:
                     rate = self.args.rate
                 else:
@@ -410,7 +448,7 @@ class BuildVmesh(Application):
 
                 i+=1
 
-                info("Limiting rate of link %s -> %s to %s mbit" % (hostnum,p,rate))
+                info("Limiting rate of link %s -> %s to %s mbit" % (self.hostnum,p,rate))
 
                 netem_str = ''
                 if self.args.multiple_topology or self.args.multiple_topology_reset:
@@ -436,29 +474,28 @@ class BuildVmesh(Application):
 
 
                 # netem for queue length, delay and loss
-                if self.linkinfo[hostnum][p]['limit'] != '':
-                    netem_str += ' limit %s' %self.linkinfo[hostnum][p]['limit']
-                if self.linkinfo[hostnum][p]['delay'] != '':
-                    netem_str += ' delay %sms' %self.linkinfo[hostnum][p]['delay']
-                if self.linkinfo[hostnum][p]['loss'] != '':
-                    netem_str += ' drop %s' %self.linkinfo[hostnum][p]['loss']
+                if self.linkinfo[self.hostnum][p]['limit'] != '':
+                    netem_str += ' limit %s' %self.linkinfo[self.hostnum][p]['limit']
+                if self.linkinfo[self.hostnum][p]['delay'] != '':
+                    netem_str += ' delay %sms' %self.linkinfo[self.hostnum][p]['delay']
+                if self.linkinfo[self.hostnum][p]['loss'] != '':
+                    netem_str += ' drop %s' %self.linkinfo[self.hostnum][p]['loss']
 
                 # create netem queue only if one of the parameter is given
-                if self.linkinfo[hostnum][p]['limit'] != '' or self.linkinfo[hostnum][p]['delay'] != '' or self.linkinfo[hostnum][p]['loss'] != '':
+                if self.linkinfo[self.hostnum][p]['limit'] != '' or self.linkinfo[self.hostnum][p]['delay'] != '' or self.linkinfo[self.hostnum][p]['loss'] != '':
                     info("      Adding netem queue, limit:\'%s\', delay:\'%s\', loss:\'%s\'"
-                        % (self.linkinfo[hostnum][p]['limit'],self.linkinfo[hostnum][p]['delay'],self.linkinfo[hostnum][p]['loss']))
+                        % (self.linkinfo[self.hostnum][p]['limit'],self.linkinfo[self.hostnum][p]['delay'],self.linkinfo[self.hostnum][p]['loss']))
                     execute(netem_str, True)
 
             except CommandFailed, inst:
-                error('Failed to add tc classes and filters for link %s -> %s' % (hostnum, p))
+                error('Failed to add tc classes and filters for link %s -> %s' % (self.hostnum, p))
                 error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
                 raise
 
     def setup_iptables(self):
-        hostnum = self.node.getNumber()
-        peers = self.conf.get(hostnum, set())
-        prefix = self.node.getHostnamePrefix()
-        mcast = self.args.multicast
+        peers = self.conf.get(self.hostnum, set())
+        prefix = self.args.node_prefix
+        mcast = self.args.mcast
         iface = self.args.interface
         gre_multicast = self.gre_multicast(mcast, iface)
 
@@ -477,10 +514,10 @@ class BuildVmesh(Application):
 
         for p in peers:
             try:
-                info("Add iptables entry: %s reaches %s" % (p, hostnum))
+                info("Add iptables entry: %s reaches %s" % (p, self.hostnum))
                 execute('iptables -A %s -s %s%s -j ACCEPT' %(mesh_name, prefix, p), True)
             except CommandFailed, inst:
-                error('Adding iptables entry "%s reaches %s" failed.' % (p, hostnum))
+                error('Adding iptables entry "%s reaches %s" failed.' % (p, self.hostnum))
                 error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
                 raise
 
@@ -532,7 +569,6 @@ class BuildVmesh(Application):
 
     def setup_routing(self):
         iface   = self.args.interface
-        hostnum = self.node.getNumber()
 
         # disable send_redirects and accept redirects
         self.set_sysctl("net.ipv4.conf.all.send_redirects",0)
@@ -543,10 +579,10 @@ class BuildVmesh(Application):
 
         for host in self.conf.keys():
             # skip localhost
-            if host==hostnum:
+            if host==self.hostnum:
                 continue
 
-            paths = BuildVmesh.find_k_equal_cost_paths(self.conf, hostnum, host)
+            paths = BuildVmesh.find_k_equal_cost_paths(self.conf, self.hostnum, host)
             # not all hosts may be reachable from this hosts ignore them
             if len(paths) == 0:
                 continue
@@ -593,7 +629,7 @@ class BuildVmesh(Application):
 
     def setup_user_helper(self):
         if self.args.user_scripts:
-            cmd = ["%s/%s" %(self.args.user_scripts, self.node.getHostname())]
+            cmd = ["%s/%s" %(self.args.user_scripts, self.hostname)]
             if os.path.isfile(cmd[0]):
                 info("Executing user-provided helper program...")
                 try:
@@ -604,12 +640,13 @@ class BuildVmesh(Application):
             else:
                 info("%s does not exist." % cmd[0])
                 info("Skipping user-provided helper program")
+                
 
     def run(self):
         """Main method of the Buildmesh object"""
 
         # Apply settings on remote hosts
-        if self.args.remote:
+        if self.args.remote and not self.args.local:
             requireNOroot()
 
             # don't print graph option --quiet was given
@@ -618,54 +655,71 @@ class BuildVmesh(Application):
             # stop here if it's a dry run
             if self.args.dry_run:
                 sys.exit(0)
-
+            hosts = list()
+            #base cmd line to execute on the remote machine
+            fabcmd = 'python $HOME/tcp-eval/topology/vmnet.py /tmp/%s -i %s -l' % (os.path.basename(self.args.config_file),self.args.interface)
             # call script on all vmrouter involved
             for host in self.conf.keys():
-                h = "vmrouter%s" % host
+                h = "%s%s" % (self.args.node_prefix,host)
                 info("Configuring host %s" % h)
-                cmd = ["ssh", h, "sudo", "/usr/local/sbin/um_vmesh","-i", self.args.interface, "-l", "-"]
-                if self.args.debug:
-                    cmd.append("--debug")
+                hosts.append(h)
+            
+            if self.args.debug:
+                fabcmd += " --debug"
 
-                if self.args.static_routes:
-                    cmd.append("--staticroutes")
+            if self.args.static_routes:
+                fabcmd += " --staticroutes"
 
-                if self.args.multipath:
-                    cmd.append("--multipath")
-                    cmd.append("--maxpath")
-                    cmd.append(str(self.args.maxpath))
+            if self.args.multipath:
+                fabcmd += " --multipath"
+                fabcmd += " --maxpath"
+                fabcmd += " "+str(self.args.maxpath)
 
-                if self.args.rate:
-                    cmd.append("-R")
-                    cmd.append(self.args.rate)
+            if self.args.rate:
+                fabcmd += " -R"
+                fabcmd += " "+self.args.rate
 
-                if self.args.user_scripts:
-                    cmd.append("--userscripts-path=%s" %self.args.user_scripts)
+            if self.args.user_scripts:
+                fabcmd += " --userscripts-path=%s" %self.args.user_scripts
 
-                if self.args.offset:
-                    cmd.append("-o")
-                    cmd.append(str(self.args.offset))
+            if self.args.offset:
+                fabcmd += " -o"
+                fabcmd += " "+str(self.args.offset)
 
-                if self.args.ip_prefix > 0:
-                     cmd.append("--ipprefix");
-                     cmd.append(str(self.args.ip_prefix));
+            if self.args.ip_prefix > 0:
+                 fabcmd += " --ipprefix"
+                 fabcmd += " "+str(self.args.ip_prefix)
 
-                if self.args.multiple_topology:
-                    cmd.append("-e")
+            if self.args.multiple_topology:
+                fabcmd += " -e"
 
-                if self.args.multiple_topology_reset:
-                    cmd.append("-E")
-
-                debug("Executing: %s", cmd)
-                proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-                rc = proc.communicate("".join(self.confstr))
-                if proc.returncode != 0:
-                    error("Configuring host %s FAILED (%s)" % (h, proc.returncode))
-
+            if self.args.multiple_topology_reset:
+                fabcmd += " -E"
+            
+            #clean up old fabric file before building the new one if existend
+            if os.path.isfile('/tmp/fabfile.py'):
+                os.remove('/tmp/fabfile.py')
+            
+            fabricfile = open('/tmp/fabfile.py','w')
+            fabricfile.write(self.fabfile % {
+                            'config' : os.path.abspath(self.args.config_file),
+                            'configname' :  os.path.basename(self.args.config_file),
+                            'cmdline' : fabcmd})
+            fabricfile.flush()
+            fabricfile.close()
+            
+            #ask for password to make the execution more comfortable
+            passwd = getpass.getpass("Please enter your sudo password for execution: ")
+            
+            #copy the configuration file on every host
+            info('Calling: %s' % ('fab -f /tmp/fabfile.py  -H %s -P copy_files' % ",".join(hosts)))
+            call('fab -f /tmp/fabfile.py -p %s -H %s copy_files' % (passwd, ",".join(hosts)))
+            
+            #execute this script on every given node
+            info('Calling: %s' % ('fab -f /tmp/fabfile.py -H %s run_vmnet' % ",".join(hosts)))
+            call('fab -f /tmp/fabfile.py -p %s -H %s run_vmnet' % (passwd, ",".join(hosts)))
         # Apply settings on local host
         else:
-            self.node = Node()
-
             info("Setting up GRE tunnel ...")
             self.setup_gre()
 
@@ -685,6 +739,7 @@ class BuildVmesh(Application):
             self.setup_user_helper()
 
     def main(self):
+        sys.path.append("$HOME/tcp-eval/library/")
         self.parse_options()
         self.apply_options()
         self.run()
