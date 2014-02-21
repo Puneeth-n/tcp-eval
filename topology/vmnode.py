@@ -291,6 +291,7 @@ class VMNode(Application):
             try:
                 info("Destroying down %s" %(vm_hostname))
                 call(cmd, shell=True)
+                info("Successfully destroyed %s"%(vm_hostname))
             except CommandFailed, exception:
                 error("Error while destroying %s" %(vm_hostname))
                 error(exception)
@@ -298,7 +299,7 @@ class VMNode(Application):
     def list(self):
         """Show information about domOs/domUs"""
             
-        print "VM-Name".rjust(12) , "IP".rjust(15)
+        print "VM-Name".rjust(20) , "IP".rjust(20), "MAC".rjust(20)
         
         stdout = None
 
@@ -312,10 +313,12 @@ class VMNode(Application):
         
         stdout = stdout[0].split('\n')
         
-        name = re.findall(r'%s.\b'%self.args.prefix,str(stdout))
-        ip = re.findall(r'%s.\b'%self.args.ip_prefix,str(stdout))
-        for item,address in zip(name,ip):
-            print str(item).rjust(12), str(address).rjust(15)
+        name = re.findall(r'%s[\d.\w]+'%self.args.prefix,str(stdout))
+        ip = re.findall(r'%s[\d]+'%self.args.ip_prefix,str(stdout))
+        mac = re.findall(r'00:16:3E:00:00:[\w\d]+',str(stdout))
+        
+        for item,address,m in zip(name,ip,mac):
+            print str(item).rjust(20), str(address).rjust(20), str(m).rjust(20)
 #        for line in ret.splitlines():
 #        	
 #        # helper function
