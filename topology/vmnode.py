@@ -63,7 +63,7 @@ class VMNode(Application):
         shared_parser.add_argument("vm_ids", metavar="id", type=int, nargs="+",
                 help="execute command for domU with ID '%(metavar)s'. The ID "\
                         "will be used as a network-wide unique domU identifier")
-        shared_parser.add_argument("-s", "--host", metavar="HOST",
+        shared_parser.add_argument("-s", "--host", metavar="HOST", dest="host",
                 action="store", default=self.config.get('SharedConf', 'host'), help="execute command "\
                         "on dom0 '%(metavar)s' (default: %(default)s)")
         shared_parser.add_argument("-p", "--prefix", metavar="PRE",
@@ -115,13 +115,16 @@ class VMNode(Application):
 
         # create parser for "list" command
         parser_list = subparsers.add_parser("list", help="list XEN domOs/domUs")
-        parser_list.add_argument("listing", action="store", nargs="?",
-                choices=("dom0", "domU", "both"), default="dom0",
-                help="which node information will be show (default: "\
-                        "%(default)s)")
         parser_list.add_argument("-i", "--ip-prefix", metavar="PRE",
-                action="store", default="192.168.128.",dest="ip_prefix", 
+                action="store", default=self.config.get('List', 'ip_prefix'),dest="ip_prefix", 
                 help="use '%(metavar)s' as "\
+                        "prefix for domU's hostname (default: %(default)s). "\
+                        "As suffix the domU ID will be used")
+        parser_list.add_argument("-t", "--vm-host", metavar="HOST", dest="vm_host",
+                action="store", default=self.config.get('List', 'host'), help="execute command "\
+                        "on dom0 '%(metavar)s' (default: %(default)s)")
+        parser_list.add_argument("-x", "--vm-prefix", metavar="PRE", dest="vm_prefix",
+                action="store", default=self.config.get('List', 'prefix'), help="use '%(metavar)s' as "\
                         "prefix for domU's hostname (default: %(default)s). "\
                         "As suffix the domU ID will be used")
 
@@ -134,20 +137,22 @@ class VMNode(Application):
             
             Config.add_section('SharedConf')
             Config.set('SharedConf','host','localhost')
-            Config.set('SharedConf','prefix','xen-128-')
-            Config.set('SharedConf','range',False)
+            Config.set('SharedConf','prefix','prefix-')
+            Config.set('SharedConf','range','False')
             
             Config.add_section('Create')
-            Config.set('Create','root','/dev/nfs nfsroot=192.168.0.1:/usr/local/muclab/image/debian-wheezy ro boot=nfs')
-            Config.set('Create','kernel','/mnt/boot/kernel/vmlinuz-3.13.0.david+')
-            Config.set('Create','initrd','/mnt/boot/initrd/initrd.img-3.13.0.david+')
-            Config.set('Create','memory',128)
+            Config.set('Create','root','/dev/nfs nfsroot=<server>:/<root-file-system> ro boot=nfs')
+            Config.set('Create','kernel','./vmlinuz')
+            Config.set('Create','initrd','./initrd.img')
+            Config.set('Create','memory','128')
             Config.set('Create','boot','n')
             Config.set('Create','cpus','2-15')
     
             Config.add_section('List')
             Config.set('List','listing','dom0')
-            Config.set('List','ip_prefix','192.168.128.')
+            Config.set('List','ip_prefix','192.186.0.')
+            Config.set('List','host','localhost')
+            Config.set('List','prefix','prefix-')
             
             Config.write(cfgfile)
             Config.readfp(cfgfile)
@@ -169,8 +174,8 @@ class VMNode(Application):
         if not self.args.action == "list":
             # VM IDs are never negative
             for vm_id in self.args.vm_ids:
-                if vm_id < 0:
-                    error("A domU ID must be greater than zero")
+                if vm_id < 2:
+                    error("A domU ID must be greater than zero and greater than 1 because 1 is reserved for the host as a ip-matter")
                     sys.exit(1)
 
             # if desired build a range of domU IDs
@@ -201,8 +206,30 @@ class VMNode(Application):
             # default values are strings, a command line option given by the
             # user is a list. In oder to access the argument always in the same
             # way, we convert the string into a list
-            if type(self.args.host) == str:
-                self.args.host = str(self.args.host).split()
+            if type(self.args.vm_host) == str:
+                self.args.vm_host = str(self.args.vm_host).split()
+                
+    def get_host(self):
+        #This is muclab specific and should be replaced by a more generic way
+        hostname = socket.gethostname()
+        
+        host = None
+        
+        if "one" in hostname:
+            host = 1
+        elif "two" in hostname:
+            host = 2
+        elif "three" in hostname:
+            host = 3
+        elif "four" in hostname:
+            host = 4
+        elif "five" in hostname:
+            host = 5
+        elif "six" in hostname:
+            host = 6
+        
+        return host
+        
 
     def create(self):
         """Start the desired number of domUs"""
@@ -211,6 +238,8 @@ class VMNode(Application):
         if not self.args.host == "localhost":
             raise NotImplementedError
 
+        host = self.get_host()
+
         # only a dry run require no root privileges
         if not self.args.dry_run:
             requireroot()
@@ -218,7 +247,7 @@ class VMNode(Application):
         # create desired domUs
         for index, vm_id in enumerate(self.__vm_ids):
             # build hostname
-            vm_hostname = "%s%i" %(self.args.prefix, vm_id)
+            vm_hostname = "%s%s-%i" %(self.args.prefix, host, vm_id)
 
             # test if domU is already running
             try:
@@ -231,8 +260,6 @@ class VMNode(Application):
 
             # create XEN config file
             info("Creating config file for domU %s" %(vm_hostname))
-            first_byte = vm_id / 256
-            rest_2bytes = vm_id % 256
             xen_config = textwrap.dedent("""\
                     name    = '%s'
                     ramdisk = '%s'
@@ -242,11 +269,11 @@ class VMNode(Application):
                     cpus    = '%s'
                     root    = '%s'
                     dhcp    = 'on'
-                    vif     = ['mac=00:16:3E:00:%02x:%02x, bridge=br0']
+                    vif     = ['mac=00:16:3E:%02x:%02x:00, bridge=br0']
                     extra   = 'xencons=tty root-ro=aufs '"""
                     %(vm_hostname, self.args.initrd, self.args.kernel,
                         self.args.memory,self.args.boot,self.args.cpus, self.args.root, 
-                        first_byte, rest_2bytes))
+                        host, vm_id))
 
             # dry run - only print config file and continue
             if self.args.dry_run:
@@ -294,7 +321,7 @@ class VMNode(Application):
         for vm_id in self.__vm_ids:
 
             # build hostname
-            vm_hostname = "%s%i" %(self.args.prefix, vm_id)
+            vm_hostname = "%s%s-%i" %(self.args.prefix, self.get_host(), vm_id)
 
             # create XEN command
             cmd = "xl shutdown %s" %(vm_hostname)
@@ -321,10 +348,10 @@ class VMNode(Application):
         for vm_id in self.__vm_ids:
 
             # build hostname
-            vm_hostname = "%s%i" %(self.args.prefix, vm_id)
+            vm_hostname = "%s%s-%i" % (self.args.prefix, self.get_host(), vm_id)
 
             # create XEN command
-            cmd = "xl destroy %s" %(vm_hostname)
+            cmd = "xl destroy %s" % (vm_hostname)
 
             # shutdown vm
             try:
@@ -338,26 +365,52 @@ class VMNode(Application):
     def list(self):
         """Show information about domOs/domUs"""
             
-        print "VM-Name".rjust(20) , "IP".rjust(20), "MAC".rjust(20)
+        print "DOM0".rjust(10), "VM-Name".rjust(20) , "IP".rjust(20), "MAC".rjust(20)
         
         stdout = None
-
-        # test if domU is already running
-        try:
-            cmd = ["nmap", "%s%i/%i" % (self.args.ip_prefix,1,24),"-sn"]
-            stdout = execute(cmd, shell=False)
-        except CommandFailed,e:
-            error("Something went wrong with the call of nmap!")
-            error(e)
-        
-        stdout = stdout[0].split('\n')
-        
-        name = re.findall(r'%s[\d.\w]+'%self.args.prefix,str(stdout))
-        ip = re.findall(r'%s[\d]+'%self.args.ip_prefix,str(stdout))
-        mac = re.findall(r'00:16:3E:00:00:[\w\d]+',str(stdout))
-        
-        for item,address,m in zip(name,ip,mac):
-            print str(item).rjust(20), str(address).rjust(20), str(m).rjust(20)
+        #if it is not localhost we first have to determine which ip-adresses the hosts have
+        if self.args.vm_host[0] != "localhost":
+            for host in self.args.vm_host[0].split(','):
+                #search for the ip-adresses of the hosts
+                try:
+                    (stdout,stderr) = execute(['host',host],shell=False)
+                except CommandFailed,e:
+                    error("Something went wrong with the call of host!")
+                    error(e)
+                    error(stderr)
+                #get the ip-address out of the response
+                ip_address = re.findall(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', stdout )
+                # scan the management network the dom0 is in
+                try:
+                    cmd = ["nmap", "%s/%s" % (ip_address[0],24),"-sn"]
+                    (stdout,stderr) = execute(cmd, shell=False)
+                except CommandFailed,e:
+                    error("Something went wrong with the call of nmap!")
+                    error(e)
+                
+                ips = re.findall(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', stdout )
+                macs = re.findall(r'(([0-9A-F]{2}:){5}([0-9A-F]{2}))', stdout )
+                
+                for ip,mac in zip(ips,macs):
+                    if ip.endswith("1"):
+                        print "host".rjust(10), "".rjust(20),str(ip).rjust(20),str(mac[0]).rjust(20)
+                    elif not ip.endswith("254") or ip.endswith("255"):
+                        print "".rjust(10), "".rjust(20), str(ip).rjust(20), str(mac[0]).rjust(20)
+        else:
+            print "host".rjust(10), "is".rjust(20),"local".rjust(20),"host".rjust(20)
+            try:
+                cmd = ["nmap", "%s%s/%s" % (self.args.ip_prefix,1,24),"-sn"]
+                (stdout,stderr) = execute(cmd, shell=False)
+            except CommandFailed,e:
+                error("Something went wrong with the call of nmap!")
+                error(e)
+            
+            ips = re.findall(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', stdout )
+            macs = re.findall(r'(([0-9A-F]{2}:){5}([0-9A-F]{2}))', stdout )
+            
+            for ip,mac in zip(ips,macs):
+                if not ip.endswith("254") or ip.endswith("255"):
+                    print "".rjust(10), "".rjust(20), str(ip).rjust(20), str(mac[0]).rjust(20)
 #        for line in ret.splitlines():
 #        	
 #        # helper function
