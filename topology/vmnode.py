@@ -175,7 +175,7 @@ class VMNode(Application):
             # VM IDs are never negative
             for vm_id in self.args.vm_ids:
                 if vm_id < 2:
-                    error("A domU ID must be greater than zero and greater than 1 because 1 is reserved for the host as a ip-matter")
+                    error("A domU ID must be greater than zero and greater than 1 because 1 is reserved for the host becaus of an ip-matter")
                     sys.exit(1)
 
             # if desired build a range of domU IDs
@@ -208,9 +208,9 @@ class VMNode(Application):
             # way, we convert the string into a list
             if type(self.args.vm_host) == str:
                 self.args.vm_host = str(self.args.vm_host).split()
-                
+
+    #This is muclab specific and should be replaced by a more generic way
     def get_host(self):
-        #This is muclab specific and should be replaced by a more generic way
         hostname = socket.gethostname()
         
         host = None
@@ -283,8 +283,7 @@ class VMNode(Application):
                 continue
 
             # write config into a file
-            cfg_fd, cfg_file = tempfile.mkstemp(suffix = "-%s.cfg"
-                    %(vm_hostname))
+            cfg_fd, cfg_file = tempfile.mkstemp(suffix = "-%s.cfg" %(vm_hostname))
             f = open(cfg_file, "w")
             f.write(xen_config)
             f.flush()
@@ -319,7 +318,6 @@ class VMNode(Application):
 
         # shudown the desired number of VMs
         for vm_id in self.__vm_ids:
-
             # build hostname
             vm_hostname = "%s%s-%i" %(self.args.prefix, self.get_host(), vm_id)
 
@@ -330,6 +328,7 @@ class VMNode(Application):
             try:
                 info("Shutting down %s" %(vm_hostname))
                 call(cmd, shell=True)
+                info("Successfully shut down %s" % (vm_hostname))
             except CommandFailed, exception:
                 error("Error while shutting down %s" %(vm_hostname))
                 error(exception)
