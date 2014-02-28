@@ -363,7 +363,7 @@ class VMNode(Application):
 
     def list(self):
         """Show information about domOs/domUs"""
-            
+        requireroot()
         print "DOM0".rjust(10), "VM-Name".rjust(20) , "IP".rjust(20), "MAC".rjust(20)
         
         stdout = None

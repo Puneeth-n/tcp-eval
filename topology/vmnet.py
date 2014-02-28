@@ -41,7 +41,6 @@ class BuildVmesh(Application):
         """Creates a new BuildVmesh object"""
         # object variables
         self.conf = None
-        self.confstr = None
         self.linkinfo = dict()
         self.ipcount = dict()
         self.shapecmd_multiple = textwrap.dedent("""\
@@ -67,8 +66,9 @@ class BuildVmesh(Application):
                 def clean():
                         run('rm -f /tmp/*')
                 """)
-        self._dnsttl = 300
-        self._dnskey = "o2bpYQo1BCYLVGZiafJ4ig=="
+        #commented out because setup_dns function is not longer needed
+#        self._dnsttl = 300
+#        self._dnskey = "o2bpYQo1BCYLVGZiafJ4ig=="
         # used routing table ids for multipath
         self._rtoffset = 300
 
@@ -91,7 +91,7 @@ class BuildVmesh(Application):
                 The link information given for an entry are just a limit for ONE direction, so
                 that it is possible to generate asynchronous lines. Empty lines and lines
                 starting with # are ignored.""")
-        # create a epilog
+        # create a epilog about the config file
         epilog = textwrap.dedent("""\
                 Configuration File: You can generate a initial-configuration file 
                 in the same directory by executing the script with no arguments. In 
@@ -231,12 +231,8 @@ class BuildVmesh(Application):
         asym_map = {}
         
         fd = open(file, 'r')
-
-        self.confstr = list()
-        
         
         for line in fd:
-            self.confstr.append(line)
 
             # strip trailing spaces
             line = line.strip()
@@ -293,10 +289,10 @@ class BuildVmesh(Application):
                 reachability_map[r].add(host)
 
         return reachability_map
-    
+
+    #This is muclab specific and should be replaced by a more generic approach
     def get_host(self):
         host = None
-        #This is muclab specific and should be replaced by a more generic approach
         if self.args.local:
             host = int(re.findall(r'\d+',socket.gethostname())[1])
         else:
@@ -358,7 +354,8 @@ class BuildVmesh(Application):
             return "%s.0/16" %( ip_address_prefix )
         else:
             return "%s.0" %( ip_address_prefix )
-#deleted mask in arguments
+
+#deleted mask in arguments because it was never used
     def gre_broadcast(self):
         """Gets the gre broadcast network address"""
         ip_address_prefix = self.args.ip_prefix
@@ -419,6 +416,7 @@ class BuildVmesh(Application):
         sa.reverse()
         return ".".join(sa)
 
+#setup_dns method was removed because it is not needed anymore
 #    def setup_dns(self):
 #        # update dns
 #        iface = self.args.interface
@@ -673,6 +671,7 @@ class BuildVmesh(Application):
                 info("%s does not exist." % cmd[0])
                 info("Skipping user-provided helper program")
 
+    #method for loading the kernel module gre (only used with the -l option)
     def setup_kernelgre(self):
         try:
             execute(["modprobe", "ip_gre"], True, False)
@@ -732,7 +731,7 @@ class BuildVmesh(Application):
             #clean up old fabric file before building the new one if existend
             if os.path.isfile('/tmp/fabfile.py'):
                 os.remove('/tmp/fabfile.py')
-            
+            #build the fabric file for copying the configuration file and executing the script on the virtual machines into /tmp/fabfile.py
             fabricfile = open('/tmp/fabfile.py','w')
             fabricfile.write(self.fabfile % {
                             'config' : os.path.abspath(self.args.config_file),
@@ -759,7 +758,8 @@ class BuildVmesh(Application):
             
             info("Setting up GRE tunnel ...")
             self.setup_gre()
-
+            
+            #removed because dns setup is not needed anymore
             #info("Update DNS entries ...")
             #self.setup_dns()
 
