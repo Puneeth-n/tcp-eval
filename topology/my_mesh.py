@@ -392,47 +392,37 @@ class BuildNet(Application):
         return address
 
     def setup_trafficcontrol(self):
-        if not self.args.interface:
+        with settings(warn_only=True):
+            #puneeth : why was this being set at eth0?????
             iface = "eth0"
-        else:
-            iface = self.args.interface
-        print iface
-        sys.exit(0)
-        peers = self.conf.get(self.hostnum, set())
-        prefix = self.args.node_prefix
-        parent_num = self.net_num(self.args.interface) + 1
+            prefix = self.args.node_prefix
+            parent_num = self.net_num(self.args.interface) + 1
 
         # Add qdisc
-        try:
-            if self.args.multiple_topology or self.args.multiple_topology_reset:
-                if self.args.multiple_topology_reset:
-                    cmd = "tc qdisc del dev %s root; " % iface + \
-                          "tc qdisc add dev %s root handle 1: htb default 1100;" % iface
-                else:
-                    cmd = "tc qdisc ls dev %(iface)s | grep root | grep -o pfifo_fast | xargs --replace=STR bash -c \" \
-                           tc qdisc del dev %(iface)s root; \
-                           tc qdisc add dev %(iface)s root handle 1: htb default 1100;\"" % {'iface' : iface}
-            else:
+        if self.args.multiple_topology or self.args.multiple_topology_reset:
+            if self.args.multiple_topology_reset:
                 cmd = "tc qdisc del dev %s root; " % iface + \
-                      "tc qdisc add dev %s root handle 1: htb default 100" % iface
+                    "tc qdisc add dev %s root handle 1: htb default 1100;" % iface
+            else:
+                cmd = "tc qdisc ls dev %(iface)s | grep root | grep -o pfifo_fast | xargs --replace=STR bash -c \" \
+                    tc qdisc del dev %(iface)s root; \
+                    tc qdisc add dev %(iface)s root handle 1: htb default 1100;\"" % {'iface' : iface}
+        else:
+            cmd = "tc qdisc del dev %s root; " % iface + \
+                "tc qdisc add dev %s root handle 1: htb default 100" % iface
 #uncomment later
-            #tasks.execute(self.exec_sudo, cmd=cmd, hosts=env.hosts)
-
-        except CommandFailed, inst:
-            error('Could not install queuing discipline')
-            error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-            raise
+        print cmd
+        #tasks.execute(self.exec_sudo, cmd=cmd, hosts=env.hosts)
 
         for hostaddr in env.hosts:
-            print self.get_host(socket.gethostbyaddr(hostaddr)[0])
-
-        sys.exit(0)
+            self.hostnum = self.get_host(socket.gethostbyaddr(hostaddr)[0])
+            peers = self.conf.get(self.hostnum, set())
 
         # Add class and filter for each peer
-        i = 0
-        for p in sorted(peers):
-            try:
-                if self.linkinfo.has_key(self.hostnum) and self.linkinfo[self.hostnum].has_key(p) and self.linkinfo[self.hostnum][p]['rate'] != '':
+            i = 0
+            for p in sorted(peers):
+                if self.linkinfo.has_key(self.hostnum) and self.linkinfo[self.hostnum].has_key(p) \
+                        and self.linkinfo[self.hostnum][p]['rate'] != '':
                     rate = self.linkinfo[self.hostnum][p]['rate']
                 elif self.args.rate:
                     rate = self.args.rate
@@ -447,22 +437,26 @@ class BuildNet(Application):
                 if self.args.multiple_topology or self.args.multiple_topology_reset:
                     #TODO: Can lead to problems if one destionation is reachable from serveral devices!
                     #Need to check for such links and combine them to one
-                    execute(self.shapecmd_multiple % {
+                    cmd = self.shapecmd_multiple % {
                         'iface' : iface,
                         'nr' : i,
                         'parentNr' : parent_num,
                         'dst' : socket.gethostbyname('%s%s' % (prefix,p)),
                         'rate' : rate}
-                        ,True)
+                    #uncomment later
+                    print cmd
+                    #tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%d%02d handle %d%02d: netem' % (iface, parent_num, i, parent_num, i)
 
                 else:
-                    execute(self.shapecmd % {
+                    cmd = self.shapecmd % {
                         'iface' : iface,
                         'nr' : i,
                         'dst' : socket.gethostbyname('%s%s' % (prefix,p)),
                         'rate' : rate}
-                        ,True)
+                    #uncomment later
+                    print cmd
+                    #tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%s handle %s0: netem' % (iface, i, i)
 
 
@@ -475,15 +469,14 @@ class BuildNet(Application):
                     netem_str += ' drop %s' %self.linkinfo[self.hostnum][p]['loss']
 
                 # create netem queue only if one of the parameter is given
-                if self.linkinfo[self.hostnum][p]['limit'] != '' or self.linkinfo[self.hostnum][p]['delay'] != '' or self.linkinfo[self.hostnum][p]['loss'] != '':
+                if self.linkinfo[self.hostnum][p]['limit'] != '' or self.linkinfo[self.hostnum][p]['delay'] != '' \
+                        or self.linkinfo[self.hostnum][p]['loss'] != '':
                     info("      Adding netem queue, limit:\'%s\', delay:\'%s\', loss:\'%s\'"
-                        % (self.linkinfo[self.hostnum][p]['limit'],self.linkinfo[self.hostnum][p]['delay'],self.linkinfo[self.hostnum][p]['loss']))
-                    execute(netem_str, True)
-
-            except CommandFailed, inst:
-                error('Failed to add tc classes and filters for link %s -> %s' % (self.hostnum, p))
-                error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-                raise
+                         % (self.linkinfo[self.hostnum][p]['limit'],self.linkinfo[self.hostnum][p]['delay'],\
+                            self.linkinfo[self.hostnum][p]['loss']))
+                    #uncomment later
+                    print netem_str
+                    #tasks.execute(self.exec_sudo, cmd=netem_str, hosts=hostaddr)
 
     def setup_iptables(self):
         peers = self.conf.get(self.hostnum, set())
@@ -650,7 +643,7 @@ class BuildNet(Application):
         if self.args.dry_run:
             sys.exit(0)
 
-        info("Setting up traffic shaping ... ") 
+        info("Setting up traffic shaping ... ")
         self.setup_trafficcontrol()
 
 #        cmd = 'uname -a'
