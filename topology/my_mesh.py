@@ -410,9 +410,7 @@ class BuildNet(Application):
         else:
             cmd = "tc qdisc del dev %s root; " % iface + \
                 "tc qdisc add dev %s root handle 1: htb default 100" % iface
-#uncomment later
-        print cmd
-        #tasks.execute(self.exec_sudo, cmd=cmd, hosts=env.hosts)
+        tasks.execute(self.exec_sudo, cmd=cmd, hosts=env.hosts)
 
         for hostaddr in env.hosts:
             self.hostnum = self.get_host(socket.gethostbyaddr(hostaddr)[0])
@@ -443,9 +441,7 @@ class BuildNet(Application):
                         'parentNr' : parent_num,
                         'dst' : socket.gethostbyname('%s%s' % (prefix,p)),
                         'rate' : rate}
-                    #uncomment later
-                    print cmd
-                    #tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
+                    tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%d%02d handle %d%02d: netem' % (iface, parent_num, i, parent_num, i)
 
                 else:
@@ -454,9 +450,7 @@ class BuildNet(Application):
                         'nr' : i,
                         'dst' : socket.gethostbyname('%s%s' % (prefix,p)),
                         'rate' : rate}
-                    #uncomment later
-                    print cmd
-                    #tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
+                    tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%s handle %s0: netem' % (iface, i, i)
 
 
@@ -474,9 +468,7 @@ class BuildNet(Application):
                     info("      Adding netem queue, limit:\'%s\', delay:\'%s\', loss:\'%s\'"
                          % (self.linkinfo[self.hostnum][p]['limit'],self.linkinfo[self.hostnum][p]['delay'],\
                             self.linkinfo[self.hostnum][p]['loss']))
-                    #uncomment later
-                    print netem_str
-                    #tasks.execute(self.exec_sudo, cmd=netem_str, hosts=hostaddr)
+                    tasks.execute(self.exec_sudo, cmd=netem_str, hosts=hostaddr)
 
     def setup_iptables(self):
         peers = self.conf.get(self.hostnum, set())
@@ -629,7 +621,10 @@ class BuildNet(Application):
 
     @parallel
     def exec_sudo(self,cmd):
-        sudo(cmd)
+        if self.args.debug:
+            print cmd
+        else:
+            sudo(cmd)
 
 
     def run(self):
