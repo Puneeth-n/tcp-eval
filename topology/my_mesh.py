@@ -43,7 +43,6 @@ from common.functions import *
 
 env.hosts = ['172.16.1.1', '172.16.1.2', '172.16.1.3', '172.16.1.4', '172.16.1.5', '172.16.1.6']
 env.username = 'puneeth'
-env.password = 'test'
 
 class BuildNet(Application):
 
@@ -153,8 +152,9 @@ class BuildNet(Application):
         """Set the options for the BuildVmesh object"""
 
         Application.apply_options(self)
-        #env.hosts.append('192.168.1.1')
-        hosts_dict = dict()
+        #ask for password to make the execution more comfortable
+        env.password = getpass.getpass("Please enter your ssh password for execution: ")
+
         for i in range(len(env.hosts)):
             self.hosts_dict[i+1] = env.hosts[i]
             print self.hosts_dict
@@ -195,9 +195,9 @@ class BuildNet(Application):
         """
 
         #get the hostname of the machine where the script is executed
-        self.hostname = socket.gethostname()
+#        self.hostname = socket.gethostname()
         # set the own number according to the hostname
-        self.hostnum = self.get_host(self.hostname)
+#        self.hostnum = self.get_host(self.hostname)
 
         # match comments
         comment_re = re.compile('^\s*#')
@@ -614,8 +614,8 @@ class BuildNet(Application):
     @parallel
     def exec_sudo(self,cmd):
         with settings(warn_only=True):
-            self.args.debug = True
-            if self.args.debug:
+        #puneeth: testing
+            if self.args.dry_run:
                 print cmd
             else:
                 sudo(cmd)
@@ -626,10 +626,6 @@ class BuildNet(Application):
         # don't print graph option --quiet was given
         if self.args.verbose or self.args.debug:
             self.visualize(self.conf)
-
-        # stop here if it's a dry run
-        if self.args.dry_run:
-            sys.exit(0)
 
         info("Setting up traffic shaping ... ")
         self.setup_trafficcontrol()
