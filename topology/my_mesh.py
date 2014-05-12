@@ -41,7 +41,7 @@ import fabric.state
 from common.application import Application
 from common.functions import *
 
-env.hosts = ['172.16.1.1', '172.16.1.2', '172.16.1.3', '172.16.1.4', '172.16.1.5']
+env.hosts = ['172.16.1.1', '172.16.1.2', '172.16.1.3', '172.16.1.4', '172.16.1.5', '172.16.1.6']
 env.username = 'puneeth'
 env.password = 'test'
 
@@ -53,6 +53,7 @@ class BuildNet(Application):
         self.conf = None
         self.linkinfo = dict()
         self.ipcount = dict()
+        self.hosts_dict = dict()
         self.shapecmd_multiple = textwrap.dedent("""\
                 tc class add dev %(iface)s parent 1: classid 1:%(parentNr)d%(nr)02d htb rate %(rate)smbit; \
                 tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
@@ -63,19 +64,7 @@ class BuildNet(Application):
                 tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
                 match ip protocol 47 0xff flowid 1:%(nr)d \
                 match ip dst %(dst)s""")
-        self.fabfile = textwrap.dedent("""\
-                from fabric.api import *
 
-                @parallel
-                def copy_files():
-                        put('%(config)s','/tmp/%(configname)s')
-
-                def run_vmnet():
-                        run('%(cmdline)s')
-
-                def clean():
-                        run('rm -f /tmp/*')
-                """)
         self._rtoffset = 300
 
         # create top-level parser
@@ -164,6 +153,11 @@ class BuildNet(Application):
         """Set the options for the BuildVmesh object"""
 
         Application.apply_options(self)
+        #env.hosts.append('192.168.1.1')
+        hosts_dict = dict()
+        for i in range(len(env.hosts)):
+            self.hosts_dict[i+1] = env.hosts[i]
+            print self.hosts_dict
 
         self.conf = self.parse_config(self.args.config_file)
 
@@ -392,11 +386,11 @@ class BuildNet(Application):
         return address
 
     def setup_trafficcontrol(self):
-        with settings(warn_only=True):
-            #puneeth : why was this being set at eth0?????
-            iface = "eth0"
-            prefix = self.args.node_prefix
-            parent_num = self.net_num(self.args.interface) + 1
+        #puneeth : why was this being set at eth0?????
+        iface = "eth0"
+        #prefix not used in this function
+        #prefix = self.args.node_prefix
+        parent_num = self.net_num(self.args.interface) + 1
 
         # Add qdisc
         if self.args.multiple_topology or self.args.multiple_topology_reset:
@@ -439,17 +433,22 @@ class BuildNet(Application):
                         'iface' : iface,
                         'nr' : i,
                         'parentNr' : parent_num,
-                        'dst' : socket.gethostbyname('%s%s' % (prefix,p)),
+                        'dst' : self.hosts_dict[p],
                         'rate' : rate}
+                    if self.args.debug:
+                        info("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_dict[self.hostnum]))
+                        info("Node No. %d : IP Address %s" %(p,self.hosts_dict[p]))
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%d%02d handle %d%02d: netem' % (iface, parent_num, i, parent_num, i)
-
                 else:
                     cmd = self.shapecmd % {
                         'iface' : iface,
                         'nr' : i,
-                        'dst' : socket.gethostbyname('%s%s' % (prefix,p)),
+                        'dst' : self.hosts_dict[p],
                         'rate' : rate}
+                    if self.args.debug:
+                        info("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_dict[self.hostnum]))
+                        info("Node No. %d : IP Address %s" %(p,self.hosts_dict[p]))
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%s handle %s0: netem' % (iface, i, i)
 
@@ -517,7 +516,7 @@ class BuildNet(Application):
         shortest = None
         for node in graph[start]:
             if node not in path:
-                newpath = BuildVmesh.find_shortest_path(graph, node, end, path)
+                newpath = BuildNet.find_shortest_path(graph, node, end, path)
                 if newpath:
                     if not shortest or len(newpath) < len(shortest):
                         shortest = newpath
@@ -526,7 +525,7 @@ class BuildNet(Application):
     @staticmethod
     def find_k_equal_cost_paths(graph, start, end, paths=[]):
         for node in graph[start]:
-            newpath = BuildVmesh.find_shortest_path(graph, node, end)
+            newpath = BuildNet.find_shortest_path(graph, node, end)
             if newpath == None:
                 continue
             if len(paths)==0 or len(newpath) < len(paths[0]):
@@ -537,13 +536,8 @@ class BuildNet(Application):
 
     def set_sysctl(self, key, val):
         arg = "%s=%s" %(key,val)
-        cmd = ["sysctl","-w",arg]
-        try:
-            execute(cmd, shell=False)
-        except CommandFailed, inst:
-            error('Failed sysctl %s failed.' %arg)
-            error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-            raise
+        cmd = "sysctl -w " + arg
+        tasks.execute(self.exec_sudo, cmd=cmd, hosts=env.hosts)
 
     def setup_routing(self):
         iface   = self.args.interface
@@ -555,55 +549,53 @@ class BuildNet(Application):
         self.set_sysctl("net.ipv4.conf.%s.accept_redirects" %iface,0)
         self.set_sysctl("net.ipv4.conf.%s.forwarding" %iface, 1)
 
-        for host in self.conf.keys():
-            # skip localhost
-            if host==self.hostnum:
-                continue
+        for hostaddr in env.hosts:
+            self.hostnum = self.get_host(socket.gethostbyaddr(hostaddr)[0])
 
-            paths = BuildVmesh.find_k_equal_cost_paths(self.conf, self.hostnum, host)
-            # not all hosts may be reachable from this hosts ignore them
-            if len(paths) == 0:
-                continue
+            for host in self.conf.keys():
+                # skip localhost
+                if host==self.hostnum:
+                    continue
 
-            # calculate distance unlike the single path version we don't need to subtract 1 as the node itself isn't saved in the list
-            dist = len(paths[0]) #equal cost so the dist from the first path suffices
+                paths = BuildNet.find_k_equal_cost_paths(self.conf, self.hostnum, host)
+                # not all hosts may be reachable from this hosts ignore them
+                if len(paths) == 0:
+                    continue
 
-            # ignore direct neighbors for now as network mask should cover them
-            if dist==1:
-                continue
+                # calculate distance unlike the single path version we don't need to subtract 1 as the node itself isn't saved in the list
+                dist = len(paths[0]) #equal cost so the dist from the first path suffices
 
-            for i in range(0, int(self.ipcount[host])):
-                host_ip = self.gre_ip(host, mask = False, offset = i)
+                # ignore direct neighbors for now as network mask should cover them
+                if dist==1:
+                    continue
 
-                cmd = ["ip", "route", "replace", host_ip]
-                if self.args.multipath:
-                    for i in range(min(len(paths),self.args.maxpath)):
-                        nexthop = self.gre_ip(paths[i][0], mask=False)
-                        cmd += ["nexthop", "via", nexthop, "dev", iface]
-                else:
-                    nexthop = self.gre_ip(paths[0][0], mask=False)
-                    cmd += ["dev", iface, "via", nexthop, "metric", str(dist)]
-                try:
-                    execute(cmd, shell=False)
-                except CommandFailed, inst:
-                    error('Adding routing entry for host %s failed.' % host_ip)
-                    error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-                    raise
+                for i in range(0, int(self.ipcount[host])):
+                    #Puneeth: we can deprecate gre_ip since we have a list of ip addresses and we generate the hostnum for them
+                    # we may need it later if we need masks
+                    host_ip = self.gre_ip(host, mask = False, offset = i)
 
-                # to have more control over multipath routes, add entries to distinct
-                # routing tables
-                if self.args.multipath:
-                    for i in range(min(len(paths),self.args.maxpath)):
-                        nexthop = self.gre_ip(paths[i][0], mask=False)
-                        table = self._rtoffset+i
-                        cmd  = ["ip", "route", "replace", host_ip]
-                        cmd += ["via", nexthop, "table", str(table)]
-                        try:
-                            execute(cmd, shell=False)
-                        except CommandFailed, inst:
-                            error('Failed adding entry for host %s to table %s.' % (host_ip, table))
-                            error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-                            raise
+                    cmd = "ip route replace %s " %host_ip
+                    if self.args.multipath:
+                        for i in range(min(len(paths),self.args.maxpath)):
+                            nexthop = self.gre_ip(paths[i][0], mask=False)
+#                            cmd += ["nexthop", "via", nexthop, "dev", iface]
+                            cmd += "nexthop via %s dev %s" %(nexthop,iface)
+                    else:
+                        nexthop = self.gre_ip(paths[0][0], mask=False)
+#                        cmd += ["dev", iface, "via", nexthop, "metric", str(dist)]
+                        cmd += "dev %s via %s metric %s" % (iface, nexthop, str(dist))
+                    tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
+
+                    # to have more control over multipath routes, add entries to distinct
+                    # routing tables
+                    if self.args.multipath:
+                        for i in range(min(len(paths),self.args.maxpath)):
+                            nexthop = self.gre_ip(paths[i][0], mask=False)
+                            table = self._rtoffset+i
+                            cmd  ="ip route replace %s" %host_ip
+#                            cmd += "via", nexthop, "table", str(table)]
+                            cmd += "via %s table %s" %(nexthop,str(table))
+                            tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
 
     def setup_user_helper(self):
         if self.args.user_scripts:
@@ -621,11 +613,12 @@ class BuildNet(Application):
 
     @parallel
     def exec_sudo(self,cmd):
-        if self.args.debug:
-            print cmd
-        else:
-            sudo(cmd)
-
+        with settings(warn_only=True):
+            self.args.debug = True
+            if self.args.debug:
+                print cmd
+            else:
+                sudo(cmd)
 
     def run(self):
         """Main method of the Buildmesh object"""
@@ -641,13 +634,11 @@ class BuildNet(Application):
         info("Setting up traffic shaping ... ")
         self.setup_trafficcontrol()
 
-#        cmd = 'uname -a'
-#        tasks.execute(self.host_u, cmd=cmd, hosts=env.hosts)
+        if self.args.static_routes:
+            info("Setting up static routing...")
+            self.setup_routing()
 
-#        for host in env.hosts:
-#            with settings(host_string = host):
-#                run('uname -a')
-#                host_type(host)
+        self.setup_user_helper()
 
     def main(self):
         sys.path.append("$HOME/Development/tcp-eval/library/")
