@@ -15,6 +15,17 @@
 # FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
 # more details.
 
+#TODO:
+#add sanity check on if ip address and interface reallly match. just one
+#interface check is enough for now
+
+#sanity check on number of nodes declared and actual number of nodes in the
+#topology. Problems if more nodes in topology and less declared
+
+#also check if user says in topology I have nodes 1 3 5 7 9 11 .... and corr
+#nodes are declared. in this case, is the code robust?
+
+
 # python imports
 import re
 import socket
@@ -30,7 +41,7 @@ import netifaces as ni
 # fabric imports (pip install fabric)
 from fabric.api import *
 from fabric import tasks
-from fabric.colors import green, red
+from fabric.colors import green, red, yellow
 from fabric.api import env, run, sudo, task, hosts, execute
 from fabric.context_managers import cd, settings, hide
 from fabric.network import disconnect_all
@@ -179,18 +190,18 @@ class BuildNet(Application):
                     print(red("In Node %s some/all option(s) missing"%(section)))
                     exit(1)
 
-            #this sort is necessary to ensure that even if the nodes are not
-            #entered in-sequence in the config file, we still have a sorted list
-            env.hosts.sort()
-            #print self.hosts_m
-            #print self.hosts_e
-            #print env.hosts
-#        print self.config.items("TOPOLOGY")
-
-#        sys.exit(0)
+        #this sort is necessary to ensure that even if the nodes are not
+        #entered in-sequence in the config file, we still have a sorted list
+        env.hosts.sort()
+        if self.args.debug:
+            print "Node: Management IP Address"
+            print self.hosts_m
+            print "Node: Experiment IP Address"
+            print self.hosts_e
+            print "Host list for fabric"
+            print env.hosts
 
         self.conf = self.parse_config(self.args.config_file)
-        sys.exit(0)
 
     def parse_config(self, file):
         """Returns an hash which maps host number -> set of reachable host numbers
@@ -356,7 +367,7 @@ class BuildNet(Application):
 
     def visualize(self, graph):
         """Visualize topology configuration"""
-        info("Configured with the following topology:")
+        info(yellow("Configured with the following topology:"))
         dot_content = list()
         dot_content.append("digraph G {")
         for host in graph:
@@ -463,7 +474,7 @@ class BuildNet(Application):
 
                 i+=1
 
-                info("Limiting rate of link %s -> %s to %s mbit" % (self.hostnum,p,rate))
+                info(yellow("Limiting rate of link %s -> %s to %s mbit" % (self.hostnum,p,rate)))
 
                 netem_str = ''
                 if self.args.multiple_topology or self.args.multiple_topology_reset:
@@ -476,8 +487,8 @@ class BuildNet(Application):
                         'dst' : self.hosts_dict[p],
                         'rate' : rate}
                     if self.args.debug:
-                        info("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_dict[self.hostnum]))
-                        info("Node No. %d : IP Address %s" %(p,self.hosts_dict[p]))
+                        info(yellow("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_dict[self.hostnum])))
+                        info(yellow("Node No. %d : IP Address %s" %(p,self.hosts_dict[p])))
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%d%02d handle %d%02d: netem' % (iface, parent_num, i, parent_num, i)
                 else:
@@ -487,8 +498,8 @@ class BuildNet(Application):
                         'dst' : self.hosts_dict[p],
                         'rate' : rate}
                     if self.args.debug:
-                        info("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_dict[self.hostnum]))
-                        info("Node No. %d : IP Address %s" %(p,self.hosts_dict[p]))
+                        info(yellow("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_dict[self.hostnum])))
+                        info(yellow("Node No. %d : IP Address %s" %(p,self.hosts_dict[p])))
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%s handle %s0: netem' % (iface, i, i)
 
@@ -504,9 +515,9 @@ class BuildNet(Application):
                 # create netem queue only if one of the parameter is given
                 if self.linkinfo[self.hostnum][p]['limit'] != '' or self.linkinfo[self.hostnum][p]['delay'] != '' \
                         or self.linkinfo[self.hostnum][p]['loss'] != '':
-                    info("      Adding netem queue, limit:\'%s\', delay:\'%s\', loss:\'%s\'"
+                    info(yellow("      Adding netem queue, limit:\'%s\', delay:\'%s\', loss:\'%s\'"
                          % (self.linkinfo[self.hostnum][p]['limit'],self.linkinfo[self.hostnum][p]['delay'],\
-                            self.linkinfo[self.hostnum][p]['loss']))
+                            self.linkinfo[self.hostnum][p]['loss'])))
                     tasks.execute(self.exec_sudo, cmd=netem_str, hosts=hostaddr)
 
     def setup_iptables(self):
@@ -641,15 +652,15 @@ class BuildNet(Application):
         if self.args.user_scripts:
             cmd = ["%s/%s" %(self.args.user_scripts, self.hostname)]
             if os.path.isfile(cmd[0]):
-                info("Executing user-provided helper program...")
+                info(yellow("Executing user-provided helper program..."))
                 try:
                     execute(cmd)
                 except CommandFailed, inst:
                     error("Execution of %s failed." % cmd[0])
                     error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
             else:
-                info("%s does not exist." % cmd[0])
-                info("Skipping user-provided helper program")
+                info(red("%s does not exist." % cmd[0]))
+                info(red("Skipping user-provided helper program"))
 
     @parallel
     def exec_sudo(self,cmd):
@@ -667,11 +678,11 @@ class BuildNet(Application):
         if self.args.verbose or self.args.debug:
             self.visualize(self.conf)
 
-        info("Setting up traffic shaping ... ")
+        info(yellow("Setting up traffic shaping ... "))
         self.setup_trafficcontrol()
 
         if self.args.static_routes:
-            info("Setting up static routing...")
+            info(yellow("Setting up static routing..."))
             self.setup_routing()
 
         self.setup_user_helper()
