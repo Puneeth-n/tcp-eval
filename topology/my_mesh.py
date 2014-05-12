@@ -22,16 +22,15 @@ import sys
 import os
 import argparse
 import string
-import subprocess
 import textwrap
-import getpass
 import ConfigParser
-from logging import info, debug, warn, error, critical
+from logging import info, warn, error
+import netifaces as ni
 
 # fabric imports (pip install fabric)
 from fabric.api import *
 from fabric import tasks
-from fabric.colors import green, yellow
+from fabric.colors import green, red
 from fabric.api import env, run, sudo, task, hosts, execute
 from fabric.context_managers import cd, settings, hide
 from fabric.network import disconnect_all
@@ -41,8 +40,9 @@ import fabric.state
 from common.application import Application
 from common.functions import *
 
-env.hosts = ['172.16.1.1', '172.16.1.2', '172.16.1.3', '172.16.1.4', '172.16.1.5', '172.16.1.6']
+env.hosts = []
 env.username = 'puneeth'
+env.password = 'test'
 
 class BuildNet(Application):
 
@@ -52,7 +52,8 @@ class BuildNet(Application):
         self.conf = None
         self.linkinfo = dict()
         self.ipcount = dict()
-        self.hosts_dict = dict()
+        self.hosts_m = dict()
+        self.hosts_e = dict()
         self.shapecmd_multiple = textwrap.dedent("""\
                 tc class add dev %(iface)s parent 1: classid 1:%(parentNr)d%(nr)02d htb rate %(rate)smbit; \
                 tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
@@ -65,6 +66,9 @@ class BuildNet(Application):
                 match ip dst %(dst)s""")
 
         self._rtoffset = 300
+
+        # initialization of the config parser
+        self.config = ConfigParser.RawConfigParser()
 
         # create top-level parser
         description = textwrap.dedent("""\
@@ -85,17 +89,9 @@ class BuildNet(Application):
                 The link information given for an entry are just a limit for ONE direction, so
                 that it is possible to generate asynchronous lines. Empty lines and lines
                 starting with # are ignored.""")
-        # create a epilog about the config file
-        epilog = textwrap.dedent("""\
-                Configuration File: You can generate a initial-configuration file
-                in the same directory by executing the script with no arguments. In
-                this configuration file you can specify all the default values
-                used by this programm. Just delete vmnet.conf if you want to
-                generate a new initial-configuration file. INFO: -r -l -y are the
-                only arguments who cannot be specified in the configuration file.""")
         Application.__init__(self,
                 formatter_class=argparse.RawDescriptionHelpFormatter,
-                description=description,epilog=epilog)
+                description=description)
         self.parser.add_argument("config_file", metavar="configfile",
                 help="Topology of the virtual network")
         self._setting_group=self.parser.add_mutually_exclusive_group()
@@ -131,7 +127,7 @@ class BuildNet(Application):
         self.parser.add_argument("-R", "--rate", metavar="RATE", action="store",
                 default="100",help="Rate limit in mbps")
         self.parser.add_argument("-n", "--ip-prefix", metavar="PRE",
-                action="store", default="192.168.0.", dest="ip_prefix",
+                action="store", default="172.16.1.", dest="ip_prefix",
                 help="Use to select different IP address ranges (default: %(default)s)")
         self._topology_group=self.parser.add_mutually_exclusive_group()
         self._topology_group.add_argument("-e", "--multiple-topology",
@@ -152,14 +148,49 @@ class BuildNet(Application):
         """Set the options for the BuildVmesh object"""
 
         Application.apply_options(self)
-        #ask for password to make the execution more comfortable
-        env.password = getpass.getpass("Please enter your ssh password for execution: ")
 
-        for i in range(len(env.hosts)):
-            self.hosts_dict[i+1] = env.hosts[i]
-            print self.hosts_dict
+        #print ni.ifaddresses(self.args.interface)[ni.AF_INET][0]['addr']
+        #print ni.ifaddresses(self.args.interface)[ni.AF_INET][0]['netmask']
+
+        try:
+            self.config.readfp(open(self.args.config_file))
+        except (OSError, IOError) as e:
+            error("configuration file not found")
+            error("no such file or directory: %s " %self.args.config_file)
+            exit(1)
+
+        if not self.config.has_section("TOPOLOGY"):
+            print (red("Error: TOPOLOGY Section missing"))
+            exit(1)
+
+        sections = self.config.sections()
+        #print sections
+        if len(self.config.sections()) == 1:
+            print (red("Error: Please give me some info on nodes "))
+            exit(1)
+
+        for section in sections:
+            if section != 'TOPOLOGY':
+                try:
+                    self.hosts_m[int(section)] = self.config.get(section,"mip")
+                    self.hosts_e[int(section)] = self.config.get(section,"eip")
+                    env.hosts.append (self.config.get(section,"mip"))
+                except:
+                    print(red("In Node %s some/all option(s) missing"%(section)))
+                    exit(1)
+
+            #this sort is necessary to ensure that even if the nodes are not
+            #entered in-sequence in the config file, we still have a sorted list
+            env.hosts.sort()
+            #print self.hosts_m
+            #print self.hosts_e
+            #print env.hosts
+#        print self.config.items("TOPOLOGY")
+
+#        sys.exit(0)
 
         self.conf = self.parse_config(self.args.config_file)
+        sys.exit(0)
 
     def parse_config(self, file):
         """Returns an hash which maps host number -> set of reachable host numbers
@@ -231,6 +262,15 @@ class BuildNet(Application):
         asym_map = {}
 
         fd = open(file, 'r')
+
+        #I hate regex :P This below for-loop fast forwards >> to the
+        #topology section
+
+        for line in fd:
+            if 'TOPOLOGY' not in line:
+                continue
+            else:
+                break
 
         for line in fd:
 
@@ -616,7 +656,7 @@ class BuildNet(Application):
         with settings(warn_only=True):
         #puneeth: testing
             if self.args.dry_run:
-                print cmd
+                print (green(cmd))
             else:
                 sudo(cmd)
 
