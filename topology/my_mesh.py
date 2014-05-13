@@ -19,9 +19,6 @@
 #add sanity check on if ip address and interface reallllllllllllllllllly match. just one
 #interface check is enough for now
 
-#also check if user says in topology I have nodes 1 3 5 7 9 11 .... and corr
-#nodes are declared. in this case, is the code robust?
-
 # python imports
 import re
 import socket
@@ -101,31 +98,21 @@ class BuildNet(Application):
                 description=description)
         self.parser.add_argument("config_file", metavar="configfile",
                 help="Topology of the virtual network")
-        self._setting_group=self.parser.add_mutually_exclusive_group()
-        self._setting_group.add_argument("-r", "--remote", action="store_true",
-                default=True, help="Apply settings for all hosts in config "\
-                        "(default: %(default)s)")
-        self._setting_group.add_argument("-t", "--node-prefix",
-                dest="node_prefix", default="vm-",
-                help="Prefix of all nodes in the topology (default: %(default)s)")
-        self._setting_group.add_argument("-l", "--local", action="store_true",
-                default=False,
-                help="Apply just the settings for localhost")
         self.parser.add_argument("-i", "--interface", metavar="IFACE",
-                action="store", default="eth1", help="Interface to use for "\
-                        "the GRE tunnel (default: %(default)s)")
+                action="store", default="eth0", help="Interface to use for "\
+                        "the experiment (default: %(default)s)")
         self.parser.add_argument("-m", "--mcast", metavar="IP",
                 action="store", default="224.66.66.66", help="Multicast IP to "\
-                        "use for GRE tunnel (default: %(default)s)")
+                        "use for the experiment (default: %(default)s)")
         self.parser.add_argument("-o", "--offset", metavar="NUM",
                 action="store", type=int, default="0", help="Add this offset "\
                         "to all node IDs in the config file")
         self.parser.add_argument("-u", "--user-scripts", metavar="PATH",
-                action="store", nargs="?", const="./config/vmnet-helper",
+                action="store", nargs="?", const="./user-script",
                 dest="user_scripts",
                 help="Execute user scripts for every node (default: %(const)s)")
         self.parser.add_argument("-s", "--static-routes", action="store_true",
-                dest="static_routes", default=False, help="Setup static routing"\
+                dest="static_routes", default=False, help="Setup static routing "\
                  "according to topology")
         self.parser.add_argument("-p", "--multipath", metavar="NUM",
                 action="store", nargs="?", type=int, const="2", default=False,
@@ -133,9 +120,6 @@ class BuildNet(Application):
                         "'%(metavar)s' of parallel paths (default: %(const)s)")
         self.parser.add_argument("-R", "--rate", metavar="RATE", action="store",
                 default="100",help="Rate limit in mbps")
-        self.parser.add_argument("-n", "--ip-prefix", metavar="PRE",
-                action="store", default="172.16.1.", dest="ip_prefix",
-                help="Use to select different IP address ranges (default: %(default)s)")
         self._topology_group=self.parser.add_mutually_exclusive_group()
         self._topology_group.add_argument("-e", "--multiple-topology",
                 action="store_true", default=False, dest="multiple_topology",
@@ -156,8 +140,7 @@ class BuildNet(Application):
 
         Application.apply_options(self)
 
-        #print ni.ifaddresses(self.args.interface)[ni.AF_INET][0]['addr']
-        #print ni.ifaddresses(self.args.interface)[ni.AF_INET][0]['netmask']
+        self.conf = self.parse_config(self.args.config_file)
 
         try:
             self.config.readfp(open(self.args.config_file))
@@ -170,43 +153,17 @@ class BuildNet(Application):
             print (red("Error: TOPOLOGY Section missing"))
             exit(1)
 
-        sections = self.config.sections()
-        #print sections
         if len(self.config.sections()) == 1:
             print (red("Error: Please give me some info on nodes "))
             exit(1)
 
-        for section in sections:
-            if section != 'TOPOLOGY':
-                try:
-                    self.hosts_m[int(section)] = self.config.get(section,"mip")
-                    self.hosts_e[int(section)] = self.config.get(section,"eip")
-                except:
-                    print(red("In Node %s some/all option(s) missing"%(section)))
-                    exit(1)
-
-        if self.args.debug:
-            print "Node: Management IP Address"
-            print self.hosts_m
-            print "Node: Experiment IP Address"
-            print self.hosts_e
-
-        self.conf = self.parse_config(self.args.config_file)
-
-        #Hold your breath sanity checks ahead!
-        #sanity check to see if the node details and those in the topology match
-        if (len(self.conf) > len(self.hosts_m)):
-            print(red("The number of nodes declared is less than the number of nodes in the topology"))
-            exit(1)
-
         for key in self.conf.keys():
             try:
-                #the list is built here and not in the previous block because
-                #the user may have given details of 100 nodes. I want fabric
-                #to run only on the nodes actually used in the topology
+                self.hosts_m[key] = self.config.get(str(key),"mip")
+                self.hosts_e[key] = self.config.get(str(key),"eip")
                 env.hosts.append(self.hosts_m[key])
             except:
-                print(red("Node %d not declared but present in topology" %(key)))
+                print(red("In Node %s some/all option(s) missing"%(key)))
                 exit(1)
 
         #this sort is necessary to ensure that even if the nodes are not
@@ -214,16 +171,24 @@ class BuildNet(Application):
         env.hosts.sort()
 
         if self.args.debug:
+            print "Node: Management IP Address"
+            print self.hosts_m
+            print "Node: Experiment IP Address"
+            print self.hosts_e
             print "Host list for fabric"
             print env.hosts
+
+        #sanity check to see if the node details and those in the topology match
+        if (len(self.conf) > len(self.hosts_m)):
+            print(red("The number of nodes declared is less than the number of nodes in the topology"))
+            exit(1)
 
         if len(set(self.hosts_e.values())) != len(self.hosts_e) or \
            len(set(self.hosts_m.values())) != len(self.hosts_m):
             print(red("Duplicate ip addresses declared for two different nodes"))
             exit(1)
 
-        exit(0)
-
+#        cmd = "ifconfig %s | awk -F':' '/inet addr/&&!/127.0.0.1/{split($2,_," ");print _[1]}'"%(self.args.interface)
 
     def parse_config(self, file):
         """Returns an hash which maps host number -> set of reachable host numbers
@@ -257,11 +222,6 @@ class BuildNet(Application):
            Note that the reachability relation defined by the config file is
            always symmetric.
         """
-
-        #get the hostname of the machine where the script is executed
-#        self.hostname = socket.gethostname()
-        # set the own number according to the hostname
-#        self.hostnum = self.get_host(self.hostname)
 
         # match comments
         comment_re = re.compile('^\s*#')
@@ -362,25 +322,13 @@ class BuildNet(Application):
 
         return reachability_map
 
-    #This is muclab specific and should be replaced by a more generic approach
-    def get_host(self,hostname):
+    #Give this function a management ip address and it will give back the hostnum
+    def get_host(self,hostaddr):
+        return [hostnum for hostnum, ipaddr in self.hosts_m.items() if ipaddr == hostaddr][0]
 
-        if "one" in hostname:
-            host = 1
-        elif "two" in hostname:
-            host = 2
-        elif "three" in hostname:
-            host = 3
-        elif "four" in hostname:
-            host = 4
-        elif "five" in hostname:
-            host = 5
-        elif "six" in hostname:
-            host = 6
-        else:
-            host = 10
-
-        return host
+    #Give this function a hostnum and it will give back the host's experiment ip address
+    def get_eip(self,hostnum):
+        return self.hosts_e[hostnum]
 
     def visualize(self, graph):
         """Visualize topology configuration"""
@@ -401,63 +349,9 @@ class BuildNet(Application):
         num = interface.lstrip(string.letters)
         return int(num)
 
-
-    def gre_ip(self, hostnum, mask = False, offset = 0):
-        """Gets the gre ip for host with number "hostnum" """
-        ip_address_prefix = self.args.ip_prefix
-        ip_address_suffix = (hostnum - 1) % 254 + 1
-
-        if mask:
-            return "%s%i/16" %( ip_address_prefix, ip_address_suffix)
-        else:
-            return "%s%i" %( ip_address_prefix, ip_address_suffix )
-
-#necessary ?????
-    def gre_net(self, mask = True):
-        """Gets the gre network address"""
-        ip_address_prefix = self.args.ip_prefix
-
-        if mask:
-            return "%s.0/16" %( ip_address_prefix )
-        else:
-            return "%s.0" %( ip_address_prefix )
-
-#deleted mask in arguments because it was never used
-    def gre_broadcast(self):
-        """Gets the gre broadcast network address"""
-        ip_address_prefix = self.args.ip_prefix
-        return "%s255" %( ip_address_prefix )
-
-    def gre_multicast(self, multicast, interface):
-        last_ip_block = multicast[multicast.rfind('.') + 1:len(multicast)]
-        net_count = self.net_num(interface)
-
-        new_ip_block = (int(last_ip_block) + net_count - 1)%254 + 1
-        return "%s.%s" %(multicast[:multicast.rfind('.')], str(new_ip_block))
-
-    def getIPaddress(self, device = None):
-        """Get the IP address of a specific device without the netmask. If device
-           is None only the hostname will be looked up.
-        """
-
-        if device is None:
-            name = self.hostname
-        else:
-            name = "%s.%s" %(device, self.hostname)
-
-        try:
-            address = socket.gethostbyname(name)
-        except socket.gaierror, inst:
-            error("Could not get the ipaddress of %s" % name)
-            error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-
-        return address
-
     def setup_trafficcontrol(self):
         #puneeth : why was this being set at eth0?????
-        iface = "eth0"
-        #prefix not used in this function
-        #prefix = self.args.node_prefix
+        iface = self.args.interface
         parent_num = self.net_num(self.args.interface) + 1
 
         # Add qdisc
@@ -475,7 +369,7 @@ class BuildNet(Application):
         tasks.execute(self.exec_sudo, cmd=cmd, hosts=env.hosts)
 
         for hostaddr in env.hosts:
-            self.hostnum = self.get_host(socket.gethostbyaddr(hostaddr)[0])
+            self.hostnum = self.get_host(hostaddr)
             peers = self.conf.get(self.hostnum, set())
 
         # Add class and filter for each peer
@@ -501,22 +395,22 @@ class BuildNet(Application):
                         'iface' : iface,
                         'nr' : i,
                         'parentNr' : parent_num,
-                        'dst' : self.hosts_dict[p],
+                        'dst' : self.hosts_e[p],
                         'rate' : rate}
                     if self.args.debug:
-                        info(yellow("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_dict[self.hostnum])))
-                        info(yellow("Node No. %d : IP Address %s" %(p,self.hosts_dict[p])))
+                        info(yellow("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_e[self.hostnum])))
+                        info(yellow("Node No. %d : IP Address %s" %(p,self.hosts_e[p])))
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%d%02d handle %d%02d: netem' % (iface, parent_num, i, parent_num, i)
                 else:
                     cmd = self.shapecmd % {
                         'iface' : iface,
                         'nr' : i,
-                        'dst' : self.hosts_dict[p],
+                        'dst' : self.hosts_e[p],
                         'rate' : rate}
                     if self.args.debug:
-                        info(yellow("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_dict[self.hostnum])))
-                        info(yellow("Node No. %d : IP Address %s" %(p,self.hosts_dict[p])))
+                        info(yellow("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_e[self.hostnum])))
+                        info(yellow("Node No. %d : IP Address %s" %(p,self.hosts_e[p])))
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%s handle %s0: netem' % (iface, i, i)
 
@@ -536,43 +430,6 @@ class BuildNet(Application):
                          % (self.linkinfo[self.hostnum][p]['limit'],self.linkinfo[self.hostnum][p]['delay'],\
                             self.linkinfo[self.hostnum][p]['loss'])))
                     tasks.execute(self.exec_sudo, cmd=netem_str, hosts=hostaddr)
-
-    def setup_iptables(self):
-        peers = self.conf.get(self.hostnum, set())
-        prefix = self.args.node_prefix
-        mcast = self.args.mcast
-        iface = self.args.interface
-        gre_multicast = self.gre_multicast(mcast, iface)
-
-        mesh_name = "mesh_gre_%s_in" %(iface)
-
-
-        try:
-            execute('iptables -D INPUT -j %s -d %s;' %( mesh_name, gre_multicast)
-                    + 'iptables -F %s;' % mesh_name
-                    + 'iptables -X %s;' % mesh_name
-                    + 'iptables -N %s' % mesh_name, True)
-        except CommandFailed, inst:
-            error('Could not create iptables chain "%s"' % mesh_name)
-            error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-            raise
-
-        for p in peers:
-            try:
-                info("Add iptables entry: %s reaches %s" % (p, self.hostnum))
-                execute('iptables -A %s -s %s%s -j ACCEPT' %(mesh_name, prefix, p), True)
-            except CommandFailed, inst:
-                error('Adding iptables entry "%s reaches %s" failed.' % (p, self.hostnum))
-                error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-                raise
-
-        try:
-            execute("iptables -A %s -j DROP &&" % mesh_name
-                    + "iptables -A INPUT -d %s -j %s" %(gre_multicast, mesh_name), True)
-        except CommandFailed, inst:
-            error("Inserting iptables chain into INPUT failed.")
-            error("Return code %s, Error message: %s" % (inst.rc, inst.stderr))
-            raise
 
     @staticmethod
     def find_shortest_path(graph, start, end, path=[]):
@@ -618,7 +475,7 @@ class BuildNet(Application):
         self.set_sysctl("net.ipv4.conf.%s.forwarding" %iface, 1)
 
         for hostaddr in env.hosts:
-            self.hostnum = self.get_host(socket.gethostbyaddr(hostaddr)[0])
+            self.hostnum = self.get_host(hostaddr)
 
             for host in self.conf.keys():
                 # skip localhost
@@ -638,19 +495,15 @@ class BuildNet(Application):
                     continue
 
                 for i in range(0, int(self.ipcount[host])):
-                    #Puneeth: we can deprecate gre_ip since we have a list of ip addresses and we generate the hostnum for them
-                    # we may need it later if we need masks
-                    host_ip = self.gre_ip(host, mask = False, offset = i)
+                    host_ip = self.get_eip(host)
 
                     cmd = "ip route replace %s " %host_ip
                     if self.args.multipath:
                         for i in range(min(len(paths),self.args.maxpath)):
-                            nexthop = self.gre_ip(paths[i][0], mask=False)
-#                            cmd += ["nexthop", "via", nexthop, "dev", iface]
+                            nexthop = self.get_eip(paths[i][0])
                             cmd += "nexthop via %s dev %s" %(nexthop,iface)
                     else:
-                        nexthop = self.gre_ip(paths[0][0], mask=False)
-#                        cmd += ["dev", iface, "via", nexthop, "metric", str(dist)]
+                        nexthop = self.get_eip(paths[0][0])
                         cmd += "dev %s via %s metric %s" % (iface, nexthop, str(dist))
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
 
@@ -658,10 +511,9 @@ class BuildNet(Application):
                     # routing tables
                     if self.args.multipath:
                         for i in range(min(len(paths),self.args.maxpath)):
-                            nexthop = self.gre_ip(paths[i][0], mask=False)
+                            nexthop = self.get_eip(paths[i][0], mask=False)
                             table = self._rtoffset+i
                             cmd  ="ip route replace %s" %host_ip
-#                            cmd += "via", nexthop, "table", str(table)]
                             cmd += "via %s table %s" %(nexthop,str(table))
                             tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
 
