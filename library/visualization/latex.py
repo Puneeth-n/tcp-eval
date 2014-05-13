@@ -58,8 +58,9 @@ class UmLatex():
 
     def __del__(self):
         """Destructor clean up temp folder"""
-
-        shutil.rmtree(self.__tempdir)
+        #puneeth
+        # hotfix to avoid deleting remp directory
+        #shutil.rmtree(self.__tempdir)
 
     def loadDefaults(self, defaultPackages=True, defaultSettings=True,
                        siunitx=True, tikz=True):

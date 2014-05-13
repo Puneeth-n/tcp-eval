@@ -59,7 +59,9 @@ class FlowgrindRecordFactory():
                  'mtu'     : int,
                  # optional values
                  'dupthresh':int,
-                 'revr':int
+                 'revr':int,
+                 'lrs':int,
+                 'tdsac':int
                  }
 
         def removeInf(val):
@@ -91,16 +93,19 @@ class FlowgrindRecordFactory():
                 flow = flow_map[int(r['flow_id'][i])][d]
                 for (key, convert) in keys.iteritems():
                     try:
-                        flow[key].append(convert(r[key][i]))
+                        if r[key][i] == 'INT_MAX':
+                            flow[key].append(convert('2147483647'))
+                        else:
+                            flow[key].append(convert(r[key][i]))
                     except KeyError, inst:
                         # ignore optional dupthresh and rvr
-                        if key in ['dupthresh','revr']:
+                        if key in ['dupthresh','revr','lrs']:
                             continue
                         warn('KeyError: Failed to get r["%s"][%u]' %(key,i))
                         raise inst
                     except TypeError, inst:
                         # ignore optional dupthresh and rvr
-                        if key in ['dupthresh','revr']:
+                        if key in ['dupthresh','revr','lrs','tdsac']:
                             continue
                         warn('TypeError: Failed to get r["%s"][%u]' %(key,i))
                         raise inst
@@ -162,6 +167,10 @@ class FlowgrindRecordFactory():
 
             # optional calculated source transactions
             "S: .* transactions\/s = (?P<s_transac>\d+\.\d+)",
+
+            # optional calculated rtt
+            # "S: .* (?P<s_sum_rtt_min>(\d+\.\d+))\/(?P<s_sum_rtt_avg>(\d+\.\d+))\/(?P<s_sum_rtt_max>(\d+\.\d+)) RTT",
+
             # source request/ response blocks
             "S: .* request blocks = (?P<s_requ_out_sum>\d+)\/(?P<s_requ_in_sum>\d+)",
             "S: .* response blocks = (?P<s_resp_out_sum>\d+)/(?P<s_resp_in_sum>\d+)",
@@ -191,9 +200,9 @@ class FlowgrindRecordFactory():
             #"(?P<revr>\d+)\s+"\
             "(?P<krtt>\d+\.\d+)\s+(?P<krttvar>\d+\.\d+)\s+(?P<krto>\d+\.\d+)\s+"\
             "(?P<castate>loss|open|disorder|recover)\s+"\
-            "(?P<mss>\d+)\s+(?P<mtu>\d+)\s+",
+            "(?P<mss>\d+)\s+(?P<mtu>\d+)\s+"\
             # optional extension -wolff
-            #"((?P<cret>\d+)\s+(?P<cfret>\d+)\s+(?P<ctret>\d+)\s+(?P<dupthresh>\d+)\s+)?"
+            "((?P<cret>\d+)\s+(?P<cfret>\d+)\s+(?P<ctret>\d+)\s+(?P<dupthresh>\d+)\s+(?P<lrs>\d+)\s+(?P<tdsac>\d+)\s*)?",
             # # Sat Dec 11 08:20:49 2010: controlling host = vmhost1, number of flows = 2, reporting interval = 0.05s, [through] = 10**6 bit/second (SVN Rev 6756)
             #
             "^# (?P<test_start_time>(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (?:|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2} \d{2}:\d{2}:\d{2} \d{4}): .* reporting interval = (?P<reporting_interval>\d+\.\d+)"
@@ -224,6 +233,7 @@ class FlowgrindRecordFactory():
             total_retransmits      = lambda r: max(map(extInt, r['cret'])),
             total_fast_retransmits = lambda r: max(map(extInt, r['cfret'])),
             total_rto_retransmits  = lambda r: max(map(extInt, r['ctret'])),
+            total_dsacks           = lambda r: max(map(extInt, r['tdsac'])),
             # list of summary lines
             thruput_list      = lambda r: map(float, r['s_thruput_out']),
             thruput_recv_list = lambda r: map(float, r['d_thruput_out']),

@@ -28,8 +28,7 @@ from latex import UmLatex
 
 class UmGnuplot():
     """Module for gnuplot scripting."""
-
-    def __init__(self, plotname, outdir, debug = False, saveit=None, force=False):
+    def __init__(self, plotname, outdir, debug=False, saveit=None, force=False, *args, **kwargs):
         """Plotname is for filename generation"""
 
         self.debug = debug
@@ -92,7 +91,7 @@ class UmGnuplot():
         set boxwidth 0.8 relative
         set clip points
         set style fill solid 1.00 border -1
-        set key on right top box lt rgb "gray50" samplen 3 width -6 spacing 1.05
+        set key on right top box lt rgb "gray50" samplen 3 width -4 spacing 1.05
         """))
 
         # offset may be changed

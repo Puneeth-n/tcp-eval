@@ -273,7 +273,9 @@ class TCPaNCR_Analysis(Analysis):
             scenarios[key] = val
 
         outdir = self.args.outdir
-        p = UmLinePointPlot("%s_%s_over_%s" % (rotype, y, x), outdir, debug = self.args.debug, force = True)
+        #p = UmLinePointPlot("%s_%s_over_%s" % (rotype, y, x), outdir, debug = self.args.debug, force = True)
+        p = UmLinePointPlot("%s_%s_over_%s" % (rotype, y, x), outdir, saveit = self.args.save, debug = self.args.debug, force = True)
+        #puneeth
         p.setXLabel(self.plotlabels[x])
         p.setYLabel(self.plotlabels[y])
         #p.setLogScale()
@@ -298,6 +300,7 @@ class TCPaNCR_Analysis(Analysis):
                 ORDER BY %s
             ''' % (x, x, y, scenarioNo, x, rotype, x, x, x)
             debug("\n\n" + query + "\n\n")
+            dbcur = self.dbcon.cursor()
             dbcur.execute(query)
 
             plotname = "%s_%s_over_%s_s%u" % (rotype, y, x, scenarioNo)
