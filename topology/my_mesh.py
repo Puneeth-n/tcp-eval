@@ -16,15 +16,11 @@
 # more details.
 
 #TODO:
-#add sanity check on if ip address and interface reallly match. just one
+#add sanity check on if ip address and interface reallllllllllllllllllly match. just one
 #interface check is enough for now
-
-#sanity check on number of nodes declared and actual number of nodes in the
-#topology. Problems if more nodes in topology and less declared
 
 #also check if user says in topology I have nodes 1 3 5 7 9 11 .... and corr
 #nodes are declared. in this case, is the code robust?
-
 
 # python imports
 import re
@@ -185,23 +181,49 @@ class BuildNet(Application):
                 try:
                     self.hosts_m[int(section)] = self.config.get(section,"mip")
                     self.hosts_e[int(section)] = self.config.get(section,"eip")
-                    env.hosts.append (self.config.get(section,"mip"))
                 except:
                     print(red("In Node %s some/all option(s) missing"%(section)))
                     exit(1)
 
-        #this sort is necessary to ensure that even if the nodes are not
-        #entered in-sequence in the config file, we still have a sorted list
-        env.hosts.sort()
         if self.args.debug:
             print "Node: Management IP Address"
             print self.hosts_m
             print "Node: Experiment IP Address"
             print self.hosts_e
+
+        self.conf = self.parse_config(self.args.config_file)
+
+        #Hold your breath sanity checks ahead!
+        #sanity check to see if the node details and those in the topology match
+        if (len(self.conf) > len(self.hosts_m)):
+            print(red("The number of nodes declared is less than the number of nodes in the topology"))
+            exit(1)
+
+        for key in self.conf.keys():
+            try:
+                #the list is built here and not in the previous block because
+                #the user may have given details of 100 nodes. I want fabric
+                #to run only on the nodes actually used in the topology
+                env.hosts.append(self.hosts_m[key])
+            except:
+                print(red("Node %d not declared but present in topology" %(key)))
+                exit(1)
+
+        #this sort is necessary to ensure that even if the nodes are not
+        #entered in-sequence in the config file, we still have a sorted list
+        env.hosts.sort()
+
+        if self.args.debug:
             print "Host list for fabric"
             print env.hosts
 
-        self.conf = self.parse_config(self.args.config_file)
+        if len(set(self.hosts_e.values())) != len(self.hosts_e) or \
+           len(set(self.hosts_m.values())) != len(self.hosts_m):
+            print(red("Duplicate ip addresses declared for two different nodes"))
+            exit(1)
+
+        exit(0)
+
 
     def parse_config(self, file):
         """Returns an hash which maps host number -> set of reachable host numbers
@@ -274,11 +296,10 @@ class BuildNet(Application):
 
         fd = open(file, 'r')
 
-        #I hate regex :P This below for-loop fast forwards >> to the
-        #topology section
+        #for-loop fast forwards >> to the topology section
 
         for line in fd:
-            if 'TOPOLOGY' not in line:
+            if '[TOPOLOGY]' not in line:
                 continue
             else:
                 break
@@ -339,10 +360,6 @@ class BuildNet(Application):
                 reachability_map[host].add(r)
                 reachability_map[r].add(host)
 
-        #puneeth
-        print reachability_map
-        #sys.exit(0)
-        #
         return reachability_map
 
     #This is muclab specific and should be replaced by a more generic approach
