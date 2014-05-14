@@ -47,6 +47,8 @@ from common.functions import *
 env.hosts = []
 env.username = 'puneeth'
 env.password = 'test'
+env.colorize_errors = True
+env.warn_only = False
 
 class BuildNet(Application):
 
@@ -357,16 +359,22 @@ class BuildNet(Application):
         # Add qdisc
         if self.args.multiple_topology or self.args.multiple_topology_reset:
             if self.args.multiple_topology_reset:
-                cmd = "tc qdisc del dev %s root; " % iface + \
-                    "tc qdisc add dev %s root handle 1: htb default 1100;" % iface
+                cmd_1 = "tc qdisc del dev %s root " % iface
+                cmd_2 = "tc qdisc add dev %s root handle 1: htb default 1100;" % iface
             else:
-                cmd = "tc qdisc ls dev %(iface)s | grep root | grep -o pfifo_fast | xargs --replace=STR bash -c \" \
-                    tc qdisc del dev %(iface)s root; \
-                    tc qdisc add dev %(iface)s root handle 1: htb default 1100;\"" % {'iface' : iface}
+                cmd_1 = "tc qdisc ls dev %(iface)s | grep root | grep -o pfifo_fast | xargs --replace=STR bash -c \" \
+                    tc qdisc del dev %(iface)s root;" % {'iface' : iface}
+                cmd_2 = "tc qdisc add dev %(iface)s root handle 1: htb default 1100;" % {'iface' : iface}
         else:
-            cmd = "tc qdisc del dev %s root; " % iface + \
-                "tc qdisc add dev %s root handle 1: htb default 100" % iface
-        tasks.execute(self.exec_sudo, cmd=cmd, hosts=env.hosts)
+            cmd_1 = "tc qdisc del dev %s root " % iface
+            cmd_2 = "tc qdisc add dev %s root handle 1: htb default 100" % iface
+
+        # It is ok if the deletion of queuing discipline fails. If the intended
+        #queueing discipline wasn't created by the script, the deletion fails.
+        with settings(warn_only=True):
+            tasks.execute(self.exec_sudo, cmd=cmd_1, hosts=env.hosts)
+        #cmd_2 shouldn't fail. Abort if any of the fabric scripts fail in the script
+        tasks.execute(self.exec_sudo, cmd=cmd_2, hosts=env.hosts)
 
         for hostaddr in env.hosts:
             self.hostnum = self.get_host(hostaddr)
@@ -532,13 +540,12 @@ class BuildNet(Application):
                 info(red("Skipping user-provided helper program"))
 
     @parallel
-    def exec_sudo(self,cmd):
-        with settings(warn_only=True):
-        #puneeth: testing
-            if self.args.dry_run:
-                print (green(cmd))
-            else:
-                sudo(cmd)
+    def exec_sudo(self,cmd, ok2fail=False):
+        if self.args.dry_run:
+            print (green(cmd))
+        else:
+            sudo(cmd)
+
 
     def run(self):
         """Main method of the Buildmesh object"""
