@@ -182,12 +182,9 @@ class BuildNet(Application):
         env.hosts.sort()
 
         if self.args.debug:
-            print "Node: Management IP Address"
-            print self.hosts_m
-            print "Node: Experiment IP Address"
-            print self.hosts_e
-            print "Host list for fabric"
-            print env.hosts
+            print yellow("Node: Management IP Address: "), self.hosts_m
+            print yellow("Node: Experiment IP Address: "), self.hosts_e
+            print yellow("Host list for fabric: "), env.hosts
 
         #sanity check to see if the node details and those in the topology match
         if (len(self.conf) > len(self.hosts_m)):
@@ -420,15 +417,11 @@ class BuildNet(Application):
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%d%02d handle %d%02d: netem' % (iface, parent_num, i, parent_num, i)
                 else:
-                    print self.hostnum
-                    print p
                     if self.hostnum < p:
                         addr = self.hosts_e[1]
                     else:
                         addr = self.hosts_e[5]
-                    print addr
-#                    continue
-#
+
                     cmd = self.shapecmd % {
                         'iface' : iface,
                         'nr' : i,
