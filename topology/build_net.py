@@ -29,7 +29,7 @@ import string
 import textwrap
 import ConfigParser
 from logging import info, warn, error
-import netifaces as ni
+#import netifaces as ni
 
 # fabric imports (pip install fabric)
 from fabric.api import *
@@ -60,16 +60,25 @@ class BuildNet(Application):
         self.ipcount = dict()
         self.hosts_m = dict()
         self.hosts_e = dict()
+
+#values for "match ip protocol <protocol number> 0xff"
+#protocol id: 17 for UDP
+#protocol id: 47 for GRE
+#protocol id: 6 for TCP
+#protocol id: 1 for ICMP
+#cat /etc/protocols for more protocol numbers
         self.shapecmd_multiple = textwrap.dedent("""\
                 tc class add dev %(iface)s parent 1: classid 1:%(parentNr)d%(nr)02d htb rate %(rate)smbit; \
                 tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
-                match ip protocol 47 0xff flowid 1:%(parentNr)d%(nr)02d \
+                match ip protocol 1 0xff flowid 1:%(parentNr)d%(nr)02d \
                 match ip dst %(dst)s""")
         self.shapecmd = textwrap.dedent("""\
                 tc class add dev %(iface)s parent 1: classid 1:%(nr)d htb rate %(rate)smbit && \
                 tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
-                match ip protocol 47 0xff flowid 1:%(nr)d \
-                match ip dst %(dst)s""")
+                flowid 1:%(nr)d \
+                match ip src %(src)s""")
+#                match ip protocol 1 0xff flowid 1:%(nr)d \
+#                match ip dst %(dst)s""")
 
         self._rtoffset = 300
 
@@ -411,10 +420,20 @@ class BuildNet(Application):
                     tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
                     netem_str = 'tc qdisc add dev %s parent 1:%d%02d handle %d%02d: netem' % (iface, parent_num, i, parent_num, i)
                 else:
+                    print self.hostnum
+                    print p
+                    if self.hostnum < p:
+                        addr = self.hosts_e[1]
+                    else:
+                        addr = self.hosts_e[5]
+                    print addr
+#                    continue
+#
                     cmd = self.shapecmd % {
                         'iface' : iface,
                         'nr' : i,
-                        'dst' : self.hosts_e[p],
+#                        'dst' : self.hosts_e[p],
+                        'src' : addr,
                         'rate' : rate}
                     if self.args.debug:
                         info(yellow("Node No. %d : IP Address %s" %(self.hostnum,self.hosts_e[self.hostnum])))
@@ -524,6 +543,7 @@ class BuildNet(Application):
                             cmd  ="ip route replace %s" %host_ip
                             cmd += "via %s table %s" %(nexthop,str(table))
                             tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
+#               exit(0)
 
     def setup_user_helper(self):
         if self.args.user_scripts:
