@@ -543,7 +543,6 @@ class BuildNet(Application):
                             cmd  ="ip route replace %s" %host_ip
                             cmd += "via %s table %s" %(nexthop,str(table))
                             tasks.execute(self.exec_sudo, cmd=cmd, hosts=hostaddr)
-#               exit(0)
 
     def setup_user_helper(self):
         if self.args.user_scripts:
