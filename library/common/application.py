@@ -18,6 +18,7 @@ import logging
 import logging.handlers
 import argparse
 
+
 class Application(object):
     """Framework for generic Applications"""
 
@@ -26,19 +27,19 @@ class Application(object):
 
         # object variables
         self.parser = argparse.ArgumentParser(prog=prog, usage=usage,
-                description=description, epilog=epilog, **kwargs)
+                                              description=description, epilog=epilog, **kwargs)
         self._log_group = self.parser.add_mutually_exclusive_group()
 
         # initialization of the argument parser
-        self._log_group.add_argument("-q", "--quiet", action = "store_false",
-                default=False, help="being more quiet")
+        self._log_group.add_argument("-q", "--quiet", action="store_false",
+                                     default=False, help="being more quiet")
         self._log_group.add_argument("-v", "--verbose", action="store_true",
-                default=False, help="being more verbose")
+                                     default=False, help="being more verbose")
         self._log_group.add_argument("--debug", action="store_true",
-                default=False, help="being even more verbose")
+                                     default=False, help="being even more verbose")
         self.parser.add_argument("--syslog", metavar="HOST", action="store",
-                nargs="?", const="localhost", help="log to syslog server "\
-                        "'%(metavar)s' (default: %(const)s)")
+                                 nargs="?", const="localhost", help="log to syslog server "
+                                 "'%(metavar)s' (default: %(const)s)")
 
     def parse_options(self, args=None):
         """Parse options for generic Application object"""
@@ -66,7 +67,7 @@ class Application(object):
             syslog_facility = logging.handlers.SysLogHandler.LOG_DAEMON
             syslog_format = "%(prog)s [%(levelname)s]: %(message)s"
             syslog_Handler = logging.handlers.SysLogHandler(syslog_host,
-                    syslog_facility)
+                                                            syslog_facility)
             syslog_Handler.setFormatter(logging.Formatter(syslog_format))
             logging.getLogger("").addHandler(syslog_Handler)
             logging.getLogger("").setLevel(log_level)
@@ -75,5 +76,4 @@ class Application(object):
             log_format = "%(asctime)s %(levelname)s: %(message)s"
             log_datefmt = "%b %d %H:%M:%S"
             logging.basicConfig(level=log_level, format=log_format,
-                    datefmt=log_datefmt)
-
+                                datefmt=log_datefmt)
