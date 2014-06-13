@@ -23,6 +23,15 @@ import sys
 import time
 import ConfigParser
 
+# fabric imports (pip install fabric)
+from fabric.api import *
+from fabric import tasks
+from fabric.colors import green, red, yellow
+from fabric.api import env, run, sudo, task, hosts, execute
+from fabric.context_managers import cd, settings, hide
+from fabric.network import disconnect_all
+import fabric.state
+
 # tcp-eval imports
 from measurement import measurement, tests
 
@@ -31,11 +40,11 @@ opts = dict(fg_bin="~/bin/flowgrind", duration=10, dump=None)
 
 delay = 20
 # repeat loop
-iterations = range(10)
+iterations = range(1)
 
 # inner loop with different scenario settings
 scenarios = [dict(scenario_label="New Reno", cc="reno"),
-             dict(scenario_label="Cubic", cc="cubic")
+             #dict(scenario_label="Cubic", cc="cubic")
              #dict( scenario_label = "Native Linux DS",flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
              #dict( scenario_label = "Native Linux TS",flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
              #dict( scenario_label = "TCP-aNCR CF", flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=1","-A","s"]),
@@ -103,7 +112,6 @@ class TcpaNCRMeasurement(measurement.Measurement):
         #print self.dictIpCount.items()
         #print self.dictIpCount.keys()
         #print self.dictIpCount.values()
-        #self.run_netem
 
     @defer.inlineCallbacks
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode):
@@ -132,8 +140,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             if 'qlnode' in chars and not bottleneckbw == None:
                 tc_cmd = "sudo tc class %s dev eth0 parent 1: classid 1:1 htb rate %umbit; \
                     sudo tc class %s dev eth0 parent 1: classid 1:2 htb rate %umbit" %(mode, bottleneckbw, mode, bottleneckbw)
-                rc = yield self.remote_execute(ip, tc_cmd, log_file=sys.stdout)
-                info(rc)
+                tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=ip)
 
             #Reverse path reordering
             if ackreor == 0:
@@ -154,32 +161,18 @@ class TcpaNCRMeasurement(measurement.Measurement):
             elif 'alnode' in chars and not ackloss == None:
                 bck_cmd = " drop %u%%" %(ackloss)
 
-            rc = yield self.remote_execute(ip, fwd_cmd, log_file=sys.stdout)
-            info(rc)
-            rc = yield self.remote_execute(ip, bck_cmd, log_file=sys.stdout)
-            info(rc)
-
-    def run_periodically(self, count = -1):
-        """change netem settings every <later_args_time> seconds"""
-
-        if len(self.later_args_list) == 0:
-            return
-
-        if count >= 0 and count < len(self.later_args_list):
-            self.run_netem(*self.later_args_list[count])
-
-        settings = [count+1]
-        reactor.callLater(self.later_args_time, self.run_periodically, *settings)
+            tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=ip)
+            tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=ip)
 
     @defer.inlineCallbacks
     def run_measurement(self, reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw):
         print reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
         for it in iterations:
             for scenario_no in range(len(scenarios)):
-#                tasks = list()
                 logs = list()
                 for run_no in range(len(self.runs)):
                     kwargs = dict()
+                    pairs = list()
 
                     kwargs.update(opts)
                     kwargs.update(self.runs[run_no])
@@ -206,30 +199,18 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
                     print ts_cmd
                     print self.runs[run_no].get('src')
+                    pairs.append(self.runs[run_no].get('src'))
                     print self.runs[run_no].get('dst')
+                    pairs.append(self.runs[run_no].get('dst'))
 
-                    rc = yield self.remote_execute(self.runs[run_no].get('src'), ts_cmd)
-                    info(rc)
-                    rc = yield self.remote_execute(self.runs[run_no].get('dst'), ts_cmd)
-                    info(rc)
+                    tasks.execute(self.exec_sudo, cmd=ts_cmd, hosts=pairs)
 
                     # set source and dest for tests
                     # actually run tests
                     info("run test %s" %self.logprefix)
-#                    if self.parallel:
-#                        tasks.append(self.run_test(tests.test_flowgrind, **kwargs))
-#                    else:
-#                        yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
-#                        self.run_periodically()
 
                     yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
                     yield self.run_test(tests.test_flowgrind, **kwargs)
-
-#                if self.parallel:
-#                    yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
-#                    self.run_periodically()
-
-#                    yield defer.DeferredList(tasks)
 
                 # header for analyze script
                 for prefix in logs:
@@ -254,12 +235,14 @@ class TcpaNCRMeasurement(measurement.Measurement):
         yield self.tear_down()
         reactor.stop()
 
-            # count overall iterations
-#            self.count += 1
-
     @defer.inlineCallbacks
     def run(self):
         pass
+
+    @parallel
+    def exec_sudo(self,cmd):
+        print (green(cmd))
+        sudo(cmd)
 
 #    @defer.inlineCallbacks
 #    def run_all(self):
