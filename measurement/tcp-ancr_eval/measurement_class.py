@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # vi:et:sw=4 ts=4
 
+# Copyright (C) 2014 Puneeth Nanjundaswamy <puneeth@netapp.com>
 # Copyright (C) 2007 - 2011 Arnd Hannemann <arnd@arndnet.de>
 # Copyright (C) 2013 Alexander Zimmermann <alexander.zimmermann@netapp.com>
 #
@@ -31,11 +32,11 @@ opts = dict(fg_bin="~/bin/flowgrind", duration=10, dump=None)
 
 delay = 20
 # repeat loop
-iterations = range(10)
+iterations = range(1)
 
 # inner loop with different scenario settings
 scenarios = [dict(scenario_label="New Reno", cc="reno"),
-             dict(scenario_label="Cubic", cc="cubic")
+#             dict(scenario_label="Cubic", cc="cubic")
              #dict( scenario_label = "Native Linux DS",flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
              #dict( scenario_label = "Native Linux TS",flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
              #dict( scenario_label = "TCP-aNCR CF", flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=1","-A","s"]),
@@ -107,20 +108,22 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
     @defer.inlineCallbacks
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode):
-        fwd_cmd = "sudo tc qdisc %s dev eth0 parent 1:2 handle 20: netem" %mode
-        bck_cmd = "sudo tc qdisc %s dev eth0 parent 1:1 handle 10: netem" %mode
 
         info("Setting netem..")
 
         for ip, chars in self.dictIpCount.items():
+            fwd_cmd = "sudo tc qdisc %s dev eth0 parent 1:2 handle 20: netem" %mode
+            bck_cmd = "sudo tc qdisc %s dev eth0 parent 1:1 handle 10: netem" %mode
 
             #forward path delay
-            if 'fdnode' in chars and not delay == None:
+            if delay == 0:
+                fwd_cmd += " delay 0%"
+            elif 'fdnode' in chars and not delay == None:
                 fwd_cmd += " delay %ums %ums 20%%" %(delay, (int)(delay * 0.1))
 
             #forward path reordering
             if reorder == 0:
-                fwd_cmd += " reorder 0%%"
+                fwd_cmd += " reorder 0%"
             elif 'fdnode' in chars and not reorder == None:
                 fwd_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(reorder, (rdelay + delay), (int)(rdelay * 0.1))
 
@@ -135,24 +138,24 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 rc = yield self.remote_execute(ip, tc_cmd, log_file=sys.stdout)
                 info(rc)
 
-            #Reverse path reordering
-            if ackreor == 0:
-                bck_cmd += " reorder 0%%"
-            elif 'rrnode' in chars and not ackreor == None:
-                bck_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(ackreor, (rdelay + delay), (int)(rdelay * 0.1))
-
             #Reverse path delay
-            if 'rdnode' in chars and not delay == None:
+            if delay == 0:
+                fwd_cmd += " delay 0%"
+            elif 'rdnode' in chars and not delay == None:
                 # if .5 values are used for delay, account for it by setting forward path one too low, and reverse path one too high
                 if (delay % 1) != 0:
                     delay += 1
                 bck_cmd += " delay %ums %ums 20%%" %(delay, (int)(delay * 0.1))
 
+            #Reverse path reordering
+            if ackreor == 0:
+                bck_cmd += " reorder 0%"
+            elif 'rrnode' in chars and not ackreor == None:
+                bck_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(ackreor, (rdelay + delay), (int)(rdelay * 0.1))
+
             #ack loss
-            if ackloss == 0:
-                bck_cmd = " drop 0%%"
-            elif 'alnode' in chars and not ackloss == None:
-                bck_cmd = " drop %u%%" %(ackloss)
+            if 'alnode' in chars and not ackloss == None:
+                bck_cmd += " drop %u%%" %(ackloss)
 
             rc = yield self.remote_execute(ip, fwd_cmd, log_file=sys.stdout)
             info(rc)
