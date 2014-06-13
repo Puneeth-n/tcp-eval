@@ -15,19 +15,35 @@
 # more details.
 
 # python imports
-from logging import info, debug, warn, error
+import textwrap
 from twisted.internet import defer, reactor
-import os
+from collections import defaultdict
+from logging import info
 import sys
 import time
+import ConfigParser
 
-# umic-mesh imports
-from um_measurement import measurement, tests
-from um_functions import call
+# tcp-eval imports
+from measurement import measurement, tests
 
-from global_vars import global_vars
+# common options used for all ntests
+opts = dict(fg_bin="~/bin/flowgrind", duration=10, dump=None)
 
-class MeasurementClass(measurement.Measurement):
+delay = 20
+# repeat loop
+iterations = range(10)
+
+# inner loop with different scenario settings
+scenarios = [dict(scenario_label="New Reno", cc="reno"),
+             dict(scenario_label="Cubic", cc="cubic")
+             #dict( scenario_label = "Native Linux DS",flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
+             #dict( scenario_label = "Native Linux TS",flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
+             #dict( scenario_label = "TCP-aNCR CF", flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=1","-A","s"]),
+             #dict( scenario_label = "TCP-aNCR AG", flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=2","-A","s"]),
+]
+
+
+class TcpaNCRMeasurement(measurement.Measurement):
     """This Measurement will run tests of several scenarios:
        - Each scenario is defined by it's flowgrind options.
        - One test of a scenario consists of parallel runs (flows)
@@ -38,85 +54,110 @@ class MeasurementClass(measurement.Measurement):
 
     def __init__(self):
         """Constructor of the object"""
-        self.logprefix=""
-        measurement.Measurement.__init__(self)
+        """Creates a new TcpEvaluationMeasurement object"""
 
-        self.parser.set_defaults(pairfile = "vmesh_dumbbell_flowgrind_measurement_pairs.lst",
-                                 offset=0)
-        self.parser.add_option('-f', '--pairfile', metavar="PAIRFILE",
-                               action = 'store', type = 'string', dest = 'pairfile',
-                               help = 'Set file to load node pairs from [default: %default]')
-        self.parser.add_option('-o', '--offset', metavar="OFFSET",
-                               action = 'store', type = 'string', dest = 'offset',
-                               help = 'Offset for routers [default: %default]')
-        self.parser.add_option('-d', '--dry_run',
-                                action = 'store_true', dest = 'dry_run',
-                                help = 'Offset for routers [default: %default]')
+        # create top-level parser
+        description = textwrap.dedent("""\
+                Creates successively four TCP flows with four different TCP
+                reordering algorithms: Linux TS, Linux DS, TCP-aNCR Agressive
+                careful limited retransmit. On all TCP senders all reordering algorithms
+                must be available and be allowable to be set . Run 'sudo sysctl
+                -a | grep reordering' to check.""")
+        measurement.Measurement.__init__(self, description=description)
+        self.logprefix = ""
+        self.parser.add_argument("pairfile", metavar="FILE", type=str,
+                                 help="Set file to load node pairs from")
+        self.delay = delay
         self.later_args_list = []
 
-    def set_option(self):
+        # initialization of the config parser
+        self.config = ConfigParser.RawConfigParser()
+        self.dictCharIp = dict()
+        self.dictIpCount = defaultdict(list)
+
+    def apply_options(self):
         """Set options"""
-        measurement.Measurement.set_option(self)
-        self.gvars = global_vars(self.options.offset)
+
+        measurement.Measurement.apply_options(self)
+        self.config.readfp(open(self.args.pairfile))
+
+        if not (self.config.has_section("PAIRS") and self.config.has_section("CONFIGURATION")):
+            print ('SECTION(s) missing in config file')
+            exit(1)
+
+        self.runs = list()
+
+        #check for all non duplicate pairs from file
+        for src, dst in self.config.items("PAIRS"):
+            self.runs.append(dict(src=src,dst=dst,run_label=(lambda src,dst: r"%s\\sra%s"%(src,dst))(src,dst)))
+
+        self.dictCharIp = {char:ip for char, ip in self.config.items("CONFIGURATION")}
+        print self.dictCharIp
+
+        for char,ip in self.dictCharIp.items():
+            self.dictIpCount[ip].append(char)
+
+        for ip, char in self.dictIpCount.items():
+            print ip
+            print char
+        #print self.dictIpCount.items()
+        #print self.dictIpCount.keys()
+        #print self.dictIpCount.values()
+        #self.run_netem
 
     @defer.inlineCallbacks
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode):
-        fdnode="vmrouter%s" %(int(self.options.offset) + 9)     # forward path delay
-        frnode="vmrouter%s" %(int(self.options.offset) + 11)    # forward path reordering
-        qlnode="vmrouter%s" %(int(self.options.offset) + 12)    # queue limit
-        rrnode="vmrouter%s" %(int(self.options.offset) + 13)    # reverse path reordering
-        rdnode="vmrouter%s" %(int(self.options.offset) + 15)    # reverse path delay
-        alnode="vmrouter%s" %(int(self.options.offset) + 14)    # ack loss
+        fwd_cmd = "sudo tc qdisc %s dev eth0 parent 1:2 handle 20: netem" %mode
+        bck_cmd = "sudo tc qdisc %s dev eth0 parent 1:1 handle 10: netem" %mode
 
         info("Setting netem..")
 
-        #forward path delay
-        if not delay == None:
-            tc_cmd = "sudo tc qdisc %s dev eth0 parent 1:53 handle 53: netem delay %ums %ums 20%%" %(mode, delay, (int)(delay * 0.1))
-            rc = yield self.remote_execute(fdnode, tc_cmd)
+        for ip, chars in self.dictIpCount.items():
 
-        #forward path reordering
-        if reorder == 0:
-            tc_cmd = "sudo tc-enhanced-netem qdisc %s dev eth0 parent 1:2 handle 10: netem reorder 0%%" %(mode)
-        else:
-            tc_cmd = "sudo tc-enhanced-netem qdisc %s dev eth0 parent 1:2 handle 10: netem reorder %u%% \
-                      reorderdelay %ums %ums 20%%" %(mode, reorder, rdelay, (int)(rdelay * 0.1))
-        rc = yield self.remote_execute(frnode, tc_cmd, log_file=sys.stdout)
+            #forward path delay
+            if 'fdnode' in chars and not delay == None:
+                fwd_cmd += " delay %ums %ums 20%%" %(delay, (int)(delay * 0.1))
 
-        #queue limit
-        if not limit == None:
-            tc_cmd = "sudo tc qdisc %s dev eth0 parent 1:1 handle 10: netem limit %u; \
-                      sudo tc qdisc %s dev eth0 parent 1:2 handle 20: netem limit %u" %(mode, limit, mode, limit)
-            rc = yield self.remote_execute(qlnode, tc_cmd, log_file=sys.stdout)
+            #forward path reordering
+            if reorder == 0:
+                fwd_cmd += " reorder 0%%"
+            elif 'fdnode' in chars and not reorder == None:
+                fwd_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(reorder, (rdelay + delay), (int)(rdelay * 0.1))
 
-        #bottleneck bandwidth
-        if not bottleneckbw == None:
-            tc_cmd = "sudo tc class %s dev eth0 parent 1: classid 1:1 htb rate %umbit; \
-                      sudo tc class %s dev eth0 parent 1: classid 1:2 htb rate %umbit" %(mode, bottleneckbw, mode, bottleneckbw)
-            rc = yield self.remote_execute(qlnode, tc_cmd, log_file=sys.stdout)
+            if 'qlnode' in chars and not limit == None:
+                fwd_cmd += " limit %u" %limit
+                bck_cmd += " limit %u" %limit
 
-        #reverse path reordering
-        if ackreor == 0:
-            tc_cmd = "sudo tc-enhanced-netem qdisc %s dev eth0 parent 1:1 handle 10: netem reorder 0%%" %(mode)
-        else:
-            tc_cmd = "sudo tc-enhanced-netem qdisc %s dev eth0 parent 1:1 handle 10: netem reorder %u%% \
-                      reorderdelay %ums %ums 20%%" %(mode, ackreor, rdelay, (int)(rdelay * 0.1))
-        rc = yield self.remote_execute(rrnode, tc_cmd, log_file=sys.stdout)
+            #bottleneck bandwidth
+            if 'qlnode' in chars and not bottleneckbw == None:
+                tc_cmd = "sudo tc class %s dev eth0 parent 1: classid 1:1 htb rate %umbit; \
+                    sudo tc class %s dev eth0 parent 1: classid 1:2 htb rate %umbit" %(mode, bottleneckbw, mode, bottleneckbw)
+                rc = yield self.remote_execute(ip, tc_cmd, log_file=sys.stdout)
+                info(rc)
 
-        #reverse path delay
-        if not delay == None:
-            # if .5 values are used for delay, account for it by setting forward path one too low, and reverse path one too high
-            if (delay % 1) != 0:
-                delay += 1
-            tc_cmd = "sudo tc qdisc %s dev eth0 parent 1:53 handle 53: netem delay %ums %ums 20%%" %(mode, delay, (int)(delay * 0.1))
-            rc = yield self.remote_execute(rdnode, tc_cmd, log_file=sys.stdout)
+            #Reverse path reordering
+            if ackreor == 0:
+                bck_cmd += " reorder 0%%"
+            elif 'rrnode' in chars and not ackreor == None:
+                bck_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(ackreor, (rdelay + delay), (int)(rdelay * 0.1))
 
-        #ack loss
-        if ackloss == 0:
-            tc_cmd = "sudo tc-enhanced-netem qdisc %s dev eth0 parent 1:1 handle 10: netem drop 0%%" %(mode)
-        else:
-            tc_cmd = "sudo tc-enhanced-netem qdisc %s dev eth0 parent 1:1 handle 10: netem drop %u%%" %(mode, ackloss)
-        rc = yield self.remote_execute(alnode, tc_cmd, log_file=sys.stdout)
+            #Reverse path delay
+            if 'rdnode' in chars and not delay == None:
+                # if .5 values are used for delay, account for it by setting forward path one too low, and reverse path one too high
+                if (delay % 1) != 0:
+                    delay += 1
+                bck_cmd += " delay %ums %ums 20%%" %(delay, (int)(delay * 0.1))
+
+            #ack loss
+            if ackloss == 0:
+                bck_cmd = " drop 0%%"
+            elif 'alnode' in chars and not ackloss == None:
+                bck_cmd = " drop %u%%" %(ackloss)
+
+            rc = yield self.remote_execute(ip, fwd_cmd, log_file=sys.stdout)
+            info(rc)
+            rc = yield self.remote_execute(ip, bck_cmd, log_file=sys.stdout)
+            info(rc)
 
     def run_periodically(self, count = -1):
         """change netem settings every <later_args_time> seconds"""
@@ -130,76 +171,69 @@ class MeasurementClass(measurement.Measurement):
         settings = [count+1]
         reactor.callLater(self.later_args_time, self.run_periodically, *settings)
 
-    def run_iperf(self, bandwidth, duration):
-        """start iperf udp flow in a new thread"""
-        sender   = "vmrouter%s" %(int(self.options.offset) + 9)
-        reveicer = "vmrouter%s" %(int(self.options.offset) + 15)
-        param = [sender, 'iperf -c ath0.%s --udp -b %s -t %s' %(receiver, bandwidth, duration)]
-        reactor.callLater(0, self.remote_execute, *param)
-
     @defer.inlineCallbacks
     def run_measurement(self, reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw):
-        for it in self.gvars.iterations:
-            for scenario_no in range(len(self.gvars.scenarios)):
-                tasks = list()
+        print reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
+        for it in iterations:
+            for scenario_no in range(len(scenarios)):
+#                tasks = list()
                 logs = list()
-                for run_no in range(len(self.gvars.runs)):
+                for run_no in range(len(self.runs)):
                     kwargs = dict()
 
-                    kwargs.update(self.gvars.opts)
-                    kwargs.update(self.gvars.runs[run_no])
+                    kwargs.update(opts)
+                    kwargs.update(self.runs[run_no])
 
                     kwargs['flowgrind_src'] = kwargs['src']
                     kwargs['flowgrind_dst'] = kwargs['dst']
 
                     # use a different port for every test
-
-                    kwargs['flowgrind_bport'] = int("%u%u%02u" %(scenario_no+1,self.count, run_no))
+                    kwargs['bport'] = int("%u%u%02u" %(scenario_no + 1, it, run_no))
 
                     # set logging prefix, tests append _testname
-                    self.logprefix="i%03u_s%u_r%u" % (self.count, scenario_no, run_no)
+                    self.logprefix="i%03u_s%u_r%u" % (it, scenario_no, run_no)
                     logs.append(self.logprefix)
 
                     # merge parameter configuration for the tests
-                    kwargs.update(self.gvars.scenarios[scenario_no])
+                    kwargs.update(scenarios[scenario_no])
 
                     # Timestamps.. dirty solution
                     ts_cmd = ""
-                    srcnode="vmrouter%s" %(self.gvars.runs[run_no]['src'])
-                    dstnode="vmrouter%s" %(self.gvars.runs[run_no]['dst'])
-                    if self.gvars.scenarios[scenario_no]["scenario_label"] == "Native Linux TS":
+                    if (scenarios[scenario_no]["scenario_label"] == "Native Linux TS"):
                         ts_cmd = "sudo sysctl -w net.ipv4.tcp_timestamps=1"
-                        info("Enabling Timestamps on %s and %s" %(srcnode, dstnode))
                     else:
                         ts_cmd = "sudo sysctl -w net.ipv4.tcp_timestamps=0"
-                        info("Disabling Timestamps on %s and %s" %(srcnode, dstnode))
-                    rc = yield self.remote_execute(srcnode, ts_cmd)
+
+                    print ts_cmd
+                    print self.runs[run_no].get('src')
+                    print self.runs[run_no].get('dst')
+
+                    rc = yield self.remote_execute(self.runs[run_no].get('src'), ts_cmd)
                     info(rc)
-                    rc = yield self.remote_execute(dstnode, ts_cmd)
+                    rc = yield self.remote_execute(self.runs[run_no].get('dst'), ts_cmd)
                     info(rc)
 
                     # set source and dest for tests
                     # actually run tests
                     info("run test %s" %self.logprefix)
-                    if self.gvars.parallel:
-                        tasks.append(self.run_test(tests.test_flowgrind, **kwargs))
-                    else:
-                        yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
-                        self.run_periodically()
-                        #self.run_iperf(self.iperf_bandwidth, self.gvars.opts['flowgrind_duration'])
+#                    if self.parallel:
+#                        tasks.append(self.run_test(tests.test_flowgrind, **kwargs))
+#                    else:
+#                        yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
+#                        self.run_periodically()
 
-                        yield self.run_test(tests.test_flowgrind, **kwargs)
-
-                if self.gvars.parallel:
                     yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
-                    self.run_periodically()
-                    #self.run_iperf(self.iperf_bandwidth, self.gvars.opts['flowgrind_duration'])
+                    yield self.run_test(tests.test_flowgrind, **kwargs)
 
-                    yield defer.DeferredList(tasks)
+#                if self.parallel:
+#                    yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
+#                    self.run_periodically()
+
+#                    yield defer.DeferredList(tasks)
 
                 # header for analyze script
                 for prefix in logs:
-                    logfile = open("%s/%s_test_flowgrind" %(self.options.log_dir, prefix), "r+")
+                    logfile = open("%s/%s_test_flowgrind" %(self.args.log_dir, prefix), "r+")
                     old = logfile.read() # read everything in the file
                     logfile.seek(0) # rewind
                     logfile.write("""testbed_param_qlimit=%u\n""" \
@@ -217,34 +251,31 @@ class MeasurementClass(measurement.Measurement):
                 info("Sleeping ..")
                 time.sleep(2)
 
+        yield self.tear_down()
+        reactor.stop()
+
             # count overall iterations
-            self.count += 1
+#            self.count += 1
 
     @defer.inlineCallbacks
     def run(self):
         pass
 
-    @defer.inlineCallbacks
-    def run_all(self):
-        """Main method"""
-
-        self.count = 0
-        self.delay = 20
-        self.bnbw = 20
-        #yield self.switchTestbedProfile(self.gvars.testbed_profile)
-
-        #iperf settings
-        #self.iperf_bandwidth = '1M'
-
-        #initial settings for netem
-        yield self.run_netem(0, 0, 0, 0, 0, 1000, 100, "add")
-
-        yield self.run()
-
-        reactor.stop()
+#    @defer.inlineCallbacks
+#    def run_all(self):
+#        """Main method"""
+#
+#        yield self.run()
+#
+    #    reactor.stop()
 
     def main(self):
-        self.parse_option()
-        self.set_option()
-        self.run_all()
+        self.parse_options()
+        self.apply_options()
+#        self.run_all()
+        self.run()
+        print 'After Run'
         reactor.run()
+
+if __name__ == "__main__":
+    TcpaNCRMeasurement().main()
