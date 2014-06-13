@@ -22,6 +22,7 @@ from twisted.internet import defer, reactor
 # tcp-eval imports
 from measurement import measurement, tests
 
+
 class TcpEvaluationMeasurement(measurement.Measurement):
     """Measurement class to test four different congestion control algorithms:
     New Reno, Highspeed TCP, Westwood+ and Cubic"""
@@ -38,7 +39,7 @@ class TcpEvaluationMeasurement(measurement.Measurement):
                 -a | grep congestion_control' to check.""")
         measurement.Measurement.__init__(self, description=description)
         self.parser.add_argument("pairfile", metavar="FILE", type=str,
-                help="Set file to load node pairs from")
+                                 help="Set file to load node pairs from")
 
     def apply_options(self):
         """Configure object based on the options form the argparser"""
@@ -56,7 +57,7 @@ class TcpEvaluationMeasurement(measurement.Measurement):
         runs = self.load_pairs_from_file(self.args.pairfile)
 
         # repeat loop
-        iterations  = range(1)
+        iterations  = range(10)
 
         # inner loop with different scenario settings
         scenarios   = [ dict(scenario_label="New Reno", cc="reno"),
@@ -100,4 +101,3 @@ class TcpEvaluationMeasurement(measurement.Measurement):
 
 if __name__ == "__main__":
     TcpEvaluationMeasurement().main()
-
