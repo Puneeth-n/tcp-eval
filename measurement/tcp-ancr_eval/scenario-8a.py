@@ -14,10 +14,10 @@
 # FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
 # more details.
 
-from measurement_class import MeasurementClass
+from measurement_class import TcpaNCRMeasurement
 from twisted.internet import defer
 
-class Measurement(MeasurementClass):
+class Measurement(TcpaNCRMeasurement):
     @defer.inlineCallbacks
     def run(self):
         self.gvars.opts["flowgrind_duration"] = 30
