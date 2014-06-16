@@ -45,11 +45,12 @@ iterations = range(1)
 
 # inner loop with different scenario settings
 scenarios = [dict(scenario_label="New Reno", cc="reno"),
+             #dict(scenario_label="Native Linux TS", cc="cubic")
              #dict(scenario_label="Cubic", cc="cubic")
-             #dict( scenario_label = "Native Linux DS",flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
-             #dict( scenario_label = "Native Linux TS",flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
-             #dict( scenario_label = "TCP-aNCR CF", flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=1","-A","s"]),
-             #dict( scenario_label = "TCP-aNCR AG", flowgrind_cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=2","-A","s"]),
+             #dict( scenario_label = "Native Linux DS",cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
+             #dict( scenario_label = "Native Linux TS",cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
+             #dict( scenario_label = "TCP-aNCR CF", cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=1","-A","s"]),
+             #dict( scenario_label = "TCP-aNCR AG", cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=2","-A","s"]),
 ]
 
 env.username = 'puneeth'
@@ -234,8 +235,21 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     # actually run tests
                     info("run test %s" %self.logprefix)
 
+                    # set tcpdump at dest for tests
+                    #dump_cmd = "dtach -n `/tmp/tdump START eth0 172.16.1.1 /tmp/%s.pcap` &" %(self.logprefix)
+                    dump_cmd = 'dtach -n `mktemp -u /tmp/dtach.XXXX` tcpdump -nvK -s 150 -i eth0 src %s and tcp -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
+                    yield tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.runs[run_no].get('dst'))
+                    # set tcpdump at dest for tests
+
                     yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
                     yield self.run_test(tests.test_flowgrind, **kwargs)
+
+                    # set tcpdump at dest for tests
+                    info("Sleeping before terminating tcpddump")
+                    time.sleep(5)
+                    dump_cmd = "killall tcpdump"
+                    yield tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.runs[run_no].get('dst'))
+                    # set tcpdump at dest for tests
 
                 # header for analyze script
                 for prefix in logs:
@@ -272,6 +286,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
     @parallel
     def exec_sudo(self,cmd):
         print (green(cmd))
+        #sudo(cmd, pty=False)
         sudo(cmd)
 
     def main(self):
