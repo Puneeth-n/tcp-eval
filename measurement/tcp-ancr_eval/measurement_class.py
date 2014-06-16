@@ -257,7 +257,6 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 info("Sleeping ..")
                 time.sleep(2)
         self.count += 1
-        #yield self.tear_down()
 
     @defer.inlineCallbacks
     def run(self):
@@ -266,6 +265,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
     @defer.inlineCallbacks
     def run_all(self):
         yield self.run()
+        yield self.tear_down()
         reactor.stop()
 
 
