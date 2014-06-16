@@ -20,7 +20,7 @@ import os
 import sys
 import time
 from logging import info, debug, warn, error, critical
-from fabric import local
+from fabric.api import local
 
 # twisted imports
 from twisted.web.xmlrpc import Proxy
@@ -223,10 +223,14 @@ class Measurement(Application):
 
     def local_execute(self, cmd, log_file, *args, **kwargs):
         """Execute command locally"""
+
         debug("127.0.0.1: running %s" %(cmd))
-        res = yield local(cmd, stdout=log_file)
-        defer.returnValue(res)
-        #return self.remote_execute("127.0.0.1", cmd, log_file, *args, **kwargs)
+
+        if not log_file:
+            logfile = self._getNull()
+        #res =yield local(cmd, stdout=log_file)
+        #defer.returnValue(res.return_code)
+        return self.remote_execute("127.0.0.1", cmd, log_file, *args, **kwargs)
 
 
     @defer.inlineCallbacks

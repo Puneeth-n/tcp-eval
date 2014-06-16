@@ -23,7 +23,7 @@ class Measurement(TcpaNCRMeasurement):
 
         # Variate Bandwidth, no reordering
 #        for bnbw in [1,2,5,10,20,30,40,50,60,70,80]:
-        for bnbw in [1]:
+        for bnbw in [1, 2]:
             qlen = int((2 * self.delay * bnbw)/11.44)+1
 
             # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
