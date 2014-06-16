@@ -89,6 +89,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.config = ConfigParser.RawConfigParser()
         self.dictCharIp = dict()
         self.dictIpCount = defaultdict(list)
+        self.count = 0
 
     def apply_options(self):
         """Set options"""
@@ -205,10 +206,10 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     kwargs['flowgrind_dst'] = kwargs['dst']
 
                     # use a different port for every test
-                    kwargs['bport'] = int("%u%u%02u" %(scenario_no + 1, it, run_no))
+                    kwargs['bport'] = int("%u%u%02u" %(scenario_no + 1, self.count, run_no))
 
                     # set logging prefix, tests append _testname
-                    self.logprefix="i%03u_s%u_r%u" % (it, scenario_no, run_no)
+                    self.logprefix="i%03u_s%u_r%u" % (self.count, scenario_no, run_no)
                     logs.append(self.logprefix)
 
                     # merge parameter configuration for the tests
@@ -255,13 +256,18 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
                 info("Sleeping ..")
                 time.sleep(2)
-
-        yield self.tear_down()
-        reactor.stop()
+        self.count += 1
+        #yield self.tear_down()
 
     @defer.inlineCallbacks
     def run(self):
         pass
+
+    @defer.inlineCallbacks
+    def run_all(self):
+        yield self.run()
+        reactor.stop()
+
 
     @parallel
     def exec_sudo(self,cmd):
@@ -271,7 +277,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
     def main(self):
         self.parse_options()
         self.apply_options()
-        self.run()
+        self.run_all()
         print 'After Run'
         reactor.run()
 
