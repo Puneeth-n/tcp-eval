@@ -22,14 +22,16 @@ class Measurement(TcpaNCRMeasurement):
     def run(self):
 
         # App limit 20 Mbit/s
-        for scenario in self.gvars.scenarios:
+        for scenario in scenarios:
             scenario['flowgrind_opts'].extend(['-R', 's=20M'])
 
-        # Variate ACKLoss, no congestion
-        for ackloss in [0,1,2,3,5,7,10,15,20,25,30,35,40]:
+        for itr in range(2):
 
-            # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-            yield self.run_measurement("reordering", "ackloss", 2, 0, self.delay, self.delay, ackloss, 1000, 100)
+            # Variate ACKLoss, no congestion
+            for ackloss in [0,1,2,3,5,7,10,15,20,25,30,35,40]:
+
+                # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
+                yield self.run_measurement("reordering", "ackloss", 2, 0, 20, 20, ackloss, 1000, 100)
 
 if __name__ == "__main__":
     Measurement().main()

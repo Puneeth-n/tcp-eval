@@ -92,6 +92,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.dictCharIp = dict()
         self.dictIpCount = defaultdict(list)
         self.count = 0
+        self.delay = 20
+        self.bnbw = 20
 
     def apply_options(self):
         """Set options"""
@@ -110,17 +112,17 @@ class TcpaNCRMeasurement(measurement.Measurement):
             self.runs.append(dict(src=src,dst=dst,run_label=(lambda src,dst: r"%s\\sra%s"%(src,dst))(src,dst)))
 
         self.dictCharIp = {char:ip for char, ip in self.config.items("CONFIGURATION")}
-        print self.dictCharIp
+        #print self.dictCharIp
 
         for char,ip in self.dictCharIp.items():
             self.dictIpCount[ip].append(char)
 
-        for ip, char in self.dictIpCount.items():
-            print ip
-            print char
-        #print self.dictIpCount.items()
-        #print self.dictIpCount.keys()
-        #print self.dictIpCount.values()
+        #for ip, char in self.dictIpCount.items():
+            #print ip
+            #print char
+            #print self.dictIpCount.items()
+            #print self.dictIpCount.keys()
+            #print self.dictIpCount.values()
 
     @defer.inlineCallbacks
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode):
@@ -224,11 +226,11 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     else:
                         ts_cmd = "sudo sysctl -w net.ipv4.tcp_timestamps=0"
 
-                    print ts_cmd
-                    print self.runs[run_no].get('src')
-                    pairs.append(self.runs[run_no].get('src'))
-                    print self.runs[run_no].get('dst')
-                    pairs.append(self.runs[run_no].get('dst'))
+                    #print ts_cmd
+                    #print self.runs[run_no].get('src')
+                    pairs.append(kwargs['src'])
+                    #print self.runs[run_no].get('dst')
+                    pairs.append(kwargs['dst'])
 
                     tasks.execute(self.exec_sudo, cmd=ts_cmd, hosts=pairs)
 
@@ -239,7 +241,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     # set tcpdump at dest for tests
                     #dump_cmd = "dtach -n `/tmp/tdump START eth0 172.16.1.1 /tmp/%s.pcap` &" %(self.logprefix)
                     #dump_cmd = 'dtach -n `mktemp -u /tmp/dtach.XXXX` tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
-                    dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
+                    dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(kwargs['src'],self.logprefix)
                     #dump_cmd = 'dtach -c dtach.tcpdump tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
                     #dump_cmd = 'tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(kwargs['src'],self.logprefix)
                     #rc = yield self.remote_execute(kwargs['dst'], dump_cmd, log_file=sys.stdout)
@@ -298,14 +300,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
     @parallel
     def exec_sudo(self,cmd):
         print (green(cmd))
-        #sudo(cmd, pty=False)
         sudo(cmd)
 
     def main(self):
         self.parse_options()
         self.apply_options()
         self.run_all()
-        print 'After Run'
         reactor.run()
 
 if __name__ == "__main__":

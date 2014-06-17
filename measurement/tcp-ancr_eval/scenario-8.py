@@ -20,13 +20,14 @@ from twisted.internet import defer
 class Measurement(TcpaNCRMeasurement):
     @defer.inlineCallbacks
     def run(self):
+        for itr in range(2):
 
-        # Variate RDelay, congestion
-        for rdelay in [5,10,15,20,25,30,35,40,45,50,60,70,80]:
-            qlen = int((2 * self.delay * self.bnbw)/11.44)+1
+            # Variate RDelay, congestion
+            for rdelay in [5,10,15,20,25,30,35,40,45,50,60,70,80]:
+                qlen = int((2 * self.delay * self.bnbw)/11.44)+1
 
-            # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-            yield self.run_measurement("reordering", "rdelay", 2, 0, rdelay, self.delay, 0, qlen, self.bnbw)
+                # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
+                yield self.run_measurement("reordering", "rdelay", 2, 0, rdelay, self.delay, 0, qlen, self.bnbw)
 
 if __name__ == "__main__":
     Measurement().main()
