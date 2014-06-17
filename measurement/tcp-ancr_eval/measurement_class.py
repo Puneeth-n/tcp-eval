@@ -54,6 +54,7 @@ scenarios = [dict(scenario_label="New Reno", cc="reno"),
 ]
 
 env.username = 'puneeth'
+env.key_filename = "~/.ssh/id_rsa"
 env.password = 'test'
 env.colorize_errors = True
 env.warn_only = False
@@ -237,7 +238,13 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
                     # set tcpdump at dest for tests
                     #dump_cmd = "dtach -n `/tmp/tdump START eth0 172.16.1.1 /tmp/%s.pcap` &" %(self.logprefix)
-                    dump_cmd = 'dtach -n `mktemp -u /tmp/dtach.XXXX` tcpdump -nvK -s 150 -i eth0 src %s and tcp -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
+                    #dump_cmd = 'dtach -n `mktemp -u /tmp/dtach.XXXX` tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
+                    dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
+                    #dump_cmd = 'dtach -c dtach.tcpdump tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
+                    #dump_cmd = 'tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(kwargs['src'],self.logprefix)
+                    #rc = yield self.remote_execute(kwargs['dst'], dump_cmd, log_file=sys.stdout)
+                    #if rc:
+                    #    print rc
                     yield tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.runs[run_no].get('dst'))
                     # set tcpdump at dest for tests
 
@@ -248,7 +255,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     info("Sleeping before terminating tcpddump")
                     time.sleep(5)
                     dump_cmd = "killall tcpdump"
-                    yield tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.runs[run_no].get('dst'))
+                    #dump_cmd = "dtach -A dtach.tcpdump killall tcpdump"
+                    #rc = yield self.remote_execute(kwargs['dst'], dump_cmd, log_file=sys.stdout)
+                    #if rc:
+                    #    print rc
+                    with settings(warn_only=True):
+                        yield tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=kwargs['dst'])
                     # set tcpdump at dest for tests
 
                 # header for analyze script
