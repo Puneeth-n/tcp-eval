@@ -20,7 +20,8 @@ from twisted.internet import defer
 class Measurement(TcpaNCRMeasurement):
     @defer.inlineCallbacks
     def run(self):
-        for itr in range(2):
+        self.first_run = True
+        for itr in range(self.iterations):
             # Variate RTT, congestion
             for delay in [2.5,5,10,15,20,25,30,35,40,45,50]:
                 qlen = int((2 * delay * self.bnbw)/11.44)+1

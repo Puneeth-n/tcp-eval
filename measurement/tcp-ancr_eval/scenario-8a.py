@@ -20,6 +20,7 @@ from twisted.internet import defer
 class Measurement(TcpaNCRMeasurement):
     @defer.inlineCallbacks
     def run(self):
+        self.first_run = True
         self.gvars.opts["flowgrind_duration"] = 30
 
         qlen = int((2 * self.delay * self.bnbw)/11.44)+1

@@ -14,11 +14,9 @@
 # FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
 # more details.
 
-from measurement_class import MeasurementClass
-from twisted.internet import defer
+from measurement_class_new import MeasurementClass
 
 class Measurement(MeasurementClass):
-    @defer.inlineCallbacks
     def run(self):
         self.first_run = True
         self.gvars.opts["flowgrind_duration"] = 45
@@ -36,7 +34,7 @@ class Measurement(MeasurementClass):
         qlen = int((2 * delayStart * self.bnbw)/11.44)+1
 
         # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-        yield self.run_measurement("both", "delay", 2,  0, rdelay, delayStart, 0, qlen, self.bnbw)
+        self.run_measurement("both", "delay", 2,  0, rdelay, delayStart, 0, qlen, self.bnbw)
 
 if __name__ == "__main__":
     Measurement().main()

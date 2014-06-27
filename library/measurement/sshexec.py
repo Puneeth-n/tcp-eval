@@ -318,7 +318,8 @@ class _Auth(userauth.SSHUserAuthClient):
         userauth.SSHUserAuthClient.serviceStarted(self)
 
     def getPassword(self):
-        return defer.succeed(getpass.getpass("password: "))
+        #return defer.succeed(getpass.getpass("password: "))
+        return defer.succeed("test")
 
     def signData(self, publicKey, signData):
         return self._agent.signData(publicKey, signData)

@@ -134,27 +134,29 @@ def test_flowgrind(mrs, log_file, src, dst, src_ctrl=None, dst_ctrl=None,
     cmd = [ fg_bin ]
 
     # add -p for numerical output
-    cmd.extend(["-p"])
+    cmd += " -p"
 
     # test duration
-    cmd.extend(["-T", "s=%.2f" % duration])
+    cmd += " -T s=%.2f" %(duration)
 
     # inital delay
     if warmup:
-        cmd.extend(["-Y", "s=%.2f" % warmup])
+        cmd += " -Y s=%.2f" %(warmup)
 
     # which tcp congestion control module
     if cc:
-        cmd.extend(["-O", "s=TCP_CONG_MODULE=%s" % cc])
+        cmd += " -O s=TCP_CONG_MODULE=%s" %(cc)
 
     # control connections in place?
-    if not src_ctrl:
-        src_ctrl = src
-    if not dst_ctrl:
-        dst_ctrl = dst
+    #if not src_ctrl:
+    #    src_ctrl = src
+    #if not dst_ctrl:
+    #    dst_ctrl = dst
 
     # build host specifiers
-    cmd.extend(["-H", "s=%s/%s,d=%s/%s" %(src, src_ctrl, dst, dst_ctrl)])
+    #cmd.extend(["-H", "s=%s/%s,d=%s/%s" %(src, src_ctrl, dst, dst_ctrl)])
+    cmd += " -H s=%s,d=%s" %(src, dst)
+    cmd += " "
 
     # just add additional parameters
     if opts:

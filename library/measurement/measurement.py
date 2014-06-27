@@ -20,7 +20,8 @@ import os
 import sys
 import time
 from logging import info, debug, warn, error, critical
-from fabric.api import local
+from fabric.api import local, settings
+import fabric.state
 
 # twisted imports
 from twisted.web.xmlrpc import Proxy
@@ -228,8 +229,9 @@ class Measurement(Application):
 
         if not log_file:
             logfile = self._getNull()
-        #res =yield local(cmd, stdout=log_file)
-        #defer.returnValue(res.return_code)
+        #result = local(cmd, capture=True)
+        #print result.stdout
+
         return self.remote_execute("127.0.0.1", cmd, log_file, *args, **kwargs)
 
 
@@ -299,7 +301,7 @@ class Measurement(Application):
         # actually run test
         info("Starting test %s with: %s", test.func_name, kwargs)
         rc = yield test(self, log_file, **kwargs)
-        if (rc == 0):
+        if (rc == 0 or rc == None):
             info("Finished test.")
         else:
             warn("Test returned with RC=%s" %rc)

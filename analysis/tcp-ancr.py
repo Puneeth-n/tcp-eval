@@ -120,8 +120,8 @@ class TCPaNCR_Analysis(Analysis):
             start_time = int(float(recordHeader["test_start_time"]))
         except KeyError:
             start_time = 0
-        rtos           = record.calculate("total_rto_retransmits")
-        frs            = record.calculate("total_fast_retransmits")
+        #rtos           = record.calculate("total_rto_retransmits")
+        #frs            = record.calculate("total_fast_retransmits")
         thruput        = record.calculate("thruput")
         try:
             rtt_avg        = record.calculate("rtt_avg")
@@ -145,15 +145,17 @@ class TCPaNCR_Analysis(Analysis):
         if thruput == 0:
             warn("Throughput is 0 in %s!" %record.filename)
 
-        try:
-            rtos = int(rtos)
-        except TypeError, inst:
-            rtos = "NULL"
+        #try:
+        #    rtos = int(rtos)
+        #except TypeError, inst:
+        #    rtos = "NULL"
+        rtos = 0
 
-        try:
-            frs = int(frs)
-        except TypeError, inst:
-            frs = "NULL"
+        #try:
+        #    frs = int(frs)
+        #except TypeError, inst:
+        #    frs = "NULL"
+        frs = 0
 
         # check for lost SYN or long connection establishing
         c = 0

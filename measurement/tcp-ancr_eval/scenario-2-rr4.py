@@ -20,7 +20,8 @@ from twisted.internet import defer
 class Measurement(TcpaNCRMeasurement):
     @defer.inlineCallbacks
     def run(self):
-        for itr in range(2):
+        self.first_run = True
+        for itr in range(self.iterations):
             # Variate Bandwidth, reordering
             for bnbw in [1,2,5,10,20,30,40,50,60,70,80]:
                 qlen = int((2 * self.delay * bnbw)/11.44)+1

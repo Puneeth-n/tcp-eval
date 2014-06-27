@@ -20,6 +20,7 @@ from twisted.internet import defer
 class Measurement(MeasurementClass):
     @defer.inlineCallbacks
     def run(self):
+        self.first_run = True
         self.gvars.opts["flowgrind_duration"] = 45
 
         rdelay = 20

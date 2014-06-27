@@ -14,29 +14,21 @@
 # FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
 # more details.
 
-from measurement_class import MeasurementClass
-from twisted.internet import defer
+from measurement_class_new import TcpaNCRMeasurement
 
-class Measurement(MeasurementClass):
-    @defer.inlineCallbacks
+class Measurement(TcpaNCRMeasurement):
     def run(self):
         self.first_run = True
         self.gvars.opts["flowgrind_duration"] = 45
 
-        rdelay = 20
-        delayStart = 25
-        delayLater = 100
-
-        qlen = int((2 * delayLater * self.bnbw)/11.44)+1
+        qlen = int((2 * self.delay * self.bnbw)/11.44)+1
 
         # reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode
-        self.later_args_list = [[2, 0, rdelay, delayLater, 0, None, None, "change"]]
-        self.later_args_time = 13
-
-        qlen = int((2 * delayStart * self.bnbw)/11.44)+1
+        self.later_args_list = [[40, 0, self.delay, self.delay, 0, None, None, "change"]]
+        self.later_args_time = 15
 
         # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-        yield self.run_measurement("both", "delay", 2,  0, rdelay, delayStart, 0, qlen, self.bnbw)
+        self.run_measurement("reordering", "rrate", 1, 0, self.delay, self.delay, 0, qlen, self.bnbw)
 
 if __name__ == "__main__":
     Measurement().main()

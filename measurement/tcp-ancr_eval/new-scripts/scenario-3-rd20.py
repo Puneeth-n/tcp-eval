@@ -14,20 +14,21 @@
 # FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
 # more details.
 
-from measurement_class import TcpaNCRMeasurement
-from twisted.internet import defer
+from measurement_class_new import TcpaNCRMeasurement
 
 class Measurement(TcpaNCRMeasurement):
-    @defer.inlineCallbacks
     def run(self):
         self.first_run = True
+
+        # App limit 20 Mbit/s
+        for scenario in self.scenarios:
+            scenario['flowgrind_opts'] += ' -R s=20M'
         for itr in range(self.iterations):
-            # Variate RTT, congestion
-            for delay in [5,10,15,20,25,30,35,40,45,50]:
-                qlen = int((2 * delay * self.bnbw)/11.44)+1
+            # Variate RTT, no congestion
+            for delay in [10,15,20,25,30,35,40,45,50]:
 
                 # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-                yield self.run_measurement("both", "delay", 2, 0, 10, delay, 0, qlen, self.bnbw)
+                self.run_measurement("reordering", "delay", 2, 0, 20, delay, 0, 1000, 100)
 
 if __name__ == "__main__":
     Measurement().main()

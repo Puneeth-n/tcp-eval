@@ -20,7 +20,7 @@ import textwrap
 from twisted.internet import defer, reactor
 from collections import defaultdict
 from logging import info
-import sys
+import sys, os
 import time
 import ConfigParser
 
@@ -36,7 +36,7 @@ import fabric.state
 # tcp-eval imports
 from measurement import measurement, tests
 # common options used for all ntests
-opts = dict(fg_bin="~/bin/flowgrind", duration=10, dump=None)
+opts = dict(fg_bin="~/bin/flowgrind", duration=10, dump=True)
 
 delay = 20
 # repeat loop
@@ -44,10 +44,10 @@ iterations = range(1)
 
 # inner loop with different scenario settings
 scenarios = [
-             dict( scenario_label = "Native Linux DS",cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
-             dict( scenario_label = "Native Linux TS",cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=native","-A","s"] ),
-             dict( scenario_label = "TCP-aNCR CF", cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=1","-A","s"]),
-             dict( scenario_label = "TCP-aNCR AG", cc="reno",flowgrind_opts=["-O","s=TCP_REORDER_MODULE=ancr",   "-O", "s=TCP_REORDER_MODE=2","-A","s"]),
+             dict( scenario_label = "Native Linux DS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
+             dict( scenario_label = "Native Linux TS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
+             dict( scenario_label = "TCP-aNCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=1 -A s"),
+             dict( scenario_label = "TCP-aNCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=2 -A s"),
 ]
 
 env.username = 'puneeth'
@@ -82,7 +82,14 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.parser.add_argument("pairfile", metavar="FILE", type=str,
                                  help="Set file to load node pairs from")
         self.parser.add_argument("-i", "--iterations", metavar="NUM",
-                action="store", type=int, default="10", help="Iterations(default: 10)")
+                action="store", type=int, default="10", help="Iterations (default: 10)")
+        self.parser.add_argument("-o", "--offset", metavar="NUM",
+                action="store", type=int, default="0", help="""offset used to 
+                prefix log files(default: 0) Should be SET when iterating on all 
+                scenarios repeatedly to ensure log files are not overwritten.""")
+        self.parser.add_argument("-y", "--dry-run", action="store_true",
+                default=False, dest="dry_run",
+                help="Test the config only without setting it up")
 
         self.delay = delay
         self.later_args_list = []
@@ -101,8 +108,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
         measurement.Measurement.apply_options(self)
         self.config.readfp(open(self.args.pairfile))
 
-        if not (self.config.has_section("PAIRS") and self.config.has_section("CONFIGURATION")):
-            print ('SECTION(s) missing in config file')
+        if not (self.config.has_section("PAIRS") and self.config.has_section("CONFIGURATION") and self.config.has_section("MANAGEMENT")):
+            print (red('SECTION(s) missing in config file'))
             exit(1)
 
         self.runs = list()
@@ -126,8 +133,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
         self.scenarios = scenarios
         self.iterations = self.args.iterations
+        self.offset = self.args.offset
 
-    @defer.inlineCallbacks
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode):
 
         info("Setting netem..")
@@ -164,9 +171,9 @@ class TcpaNCRMeasurement(measurement.Measurement):
             if 'qlnode' in chars and bottleneckbw:
                 #tc_cmd = "sudo tc class %s dev eth0 parent 1: classid 1:1 htb rate %umbit; \
                 #    sudo tc class %s dev eth0 parent 1: classid 1:2 htb rate %umbit" %(mode, bottleneckbw, mode, bottleneckbw)
-                tc_cmd = "sudo tc class change dev eth0 parent 1: classid 1:1 htb rate %umbit; \
+                tc_cmd = "sudo tc class change dev eth0 parent 1: classid 1:1 htb rate %umbit &&\
                     sudo tc class change dev eth0 parent 1: classid 1:2 htb rate %umbit" %(bottleneckbw, bottleneckbw)
-                yield tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=ip)
+                tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=ip)
 
             #Reverse path delay
             #if delay == 0:
@@ -194,11 +201,108 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 set_bck_cmd = True
 
             if set_fwd_cmd:
-                yield tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=ip)
+                tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=ip)
             if set_bck_cmd:
-                yield tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=ip)
+                tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=ip)
 
-    @defer.inlineCallbacks
+    def start_test(self, log_file, src, dst, duration=15, warmup=0, cc=None, dump=None,
+            bport=5999, opts=[], flowgrind_opts = [], fg_bin="flowgrind", **kwargs):
+        """This test performs a simple flowgrind (new, aka dd version) test with
+          one tcp flow from src to dst.
+
+             required arguments:
+                  log_file: file descriptor where the results are written to
+                  src     : sender of the flow
+                  dst     : receiver of the flow
+
+             optional arguments:
+                  duration : duration of the flow in seconds
+                  cc       : congestion control method to use
+                  warmup   : warmup time for flow in seconds
+                  dump     : turn tcpdump on src and dst on iface 'dump' on
+                  bport    : flowgrind base port
+                  opts     : additional command line arguments
+                  fg_bin   : flowgrind binary
+        """
+        # path of executable
+        cmd = fg_bin
+
+        # add -p for numerical output
+        cmd += " -p"
+
+        # test duration
+        cmd += " -T s=%.2f" % (duration)
+
+        # inital delay
+        if warmup:
+            cmd += " -Y s=%.2f" % (warmup)
+
+        # which tcp congestion control module
+        if cc:
+            cmd += " -O s=TCP_CONG_MODULE=%s" % (cc)
+
+        # build host specifiers
+        cmd += " -H s=%s,d=%s" %(src, dst)
+
+        # just add additional parameters
+        if opts:
+            cmd += opts
+
+        if flowgrind_opts:
+            cmd += flowgrind_opts
+
+        if dump:
+            # set tcpdump at dest for tests
+            dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap &' %(src,self.logprefix)
+            tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst)
+            # set tcpdump at dest for tests
+
+        if self.args.dry_run:
+            print (yellow(cmd))
+        else:
+            # start flowgrind
+            result = local(cmd, capture=True)
+            if not result.return_code ==0:
+                print (red("Error executing flowgrind\n"))
+                exit(1)
+            log_file.write(result.stdout)
+            log_file.flush()
+
+        if dump:
+            time.sleep(5)
+            dump_cmd = "killall tcpdump"
+            with settings(warn_only=True):
+                tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst)
+        print (green("Finished test."))
+
+    def prepare_test(self, append=False, **kwargs):
+        """Runs a test method with arguments self, logfile, args"""
+
+        if not os.path.exists(self.args.log_dir):
+            info("%s does not exist, creating. " % self.args.log_dir)
+            os.mkdir(self.args.log_dir)
+
+        log_name = "%s_test_flowgrind" %(self.logprefix)
+        log_path = os.path.join(self.args.log_dir, log_name)
+
+        if append:
+            log_file = open(log_path, 'a')
+        else:
+            log_file = open(log_path, 'w')
+
+        # write config into logfile 
+        for item in kwargs.iteritems():
+            log_file.write("%s=%s\n" %item)
+        log_file.write("test_start_time=%s\n" %time.time())
+        log_file.write("BEGIN_TEST_OUTPUT\n")
+        log_file.flush()
+
+        # actually run test 
+        info("Starting test test_flowgrind with: %s", kwargs)
+        self.start_test(log_file, **kwargs)
+        #self._update_stats("test_flowgrind",rc)
+        log_file.close()
+
     def run_measurement(self, reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw):
         print reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
         for it in iterations:
@@ -218,12 +322,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     kwargs['bport'] = int("%u%u%02u" %(scenario_no + 1, self.count, run_no))
 
                     # set logging prefix, tests append _testname
-                    self.logprefix="i%03u_s%u_r%u" % (self.count, scenario_no, run_no)
+                    self.logprefix="i%u%03u_s%u_r%u" % (self.offset,self.count, scenario_no, run_no)
                     logs.append(self.logprefix)
 
                     # merge parameter configuration for the tests
                     kwargs.update(self.scenarios[scenario_no])
-                    print self.scenarios[scenario_no]
+                    #print self.scenarios[scenario_no]
 
                     # Timestamps.. dirty solution
                     ts_cmd = ""
@@ -232,10 +336,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     else:
                         ts_cmd = "sudo sysctl -w net.ipv4.tcp_timestamps=0"
 
-                    #print ts_cmd
-                    #print self.runs[run_no].get('src')
                     pairs.append(kwargs['src'])
-                    #print self.runs[run_no].get('dst')
                     pairs.append(kwargs['dst'])
 
                     tasks.execute(self.exec_sudo, cmd=ts_cmd, hosts=pairs)
@@ -244,37 +345,14 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     # actually run tests
                     info("run test %s" %self.logprefix)
 
-                    # set tcpdump at dest for tests
-                    #dump_cmd = "dtach -n `/tmp/tdump START eth0 172.16.1.1 /tmp/%s.pcap` &" %(self.logprefix)
-                    #dump_cmd = 'dtach -n `mktemp -u /tmp/dtach.XXXX` tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
-                    #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(kwargs['src'],self.logprefix)
-                    #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 "src host %s and tcp" -w /tmp/%s.pcap &' %(kwargs['src'],self.logprefix)
-                    dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap &' %(kwargs['src'],self.logprefix)
-                    #dump_cmd = 'dtach -c dtach.tcpdump tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(self.runs[run_no].get('src'),self.logprefix)
-                    #dump_cmd = 'tcpdump -nvK -s 150 -i eth0 "src host %s and dst port 5999 and tcp" -w /tmp/%s.pcap &' %(kwargs['src'],self.logprefix)
-                    #rc = yield self.remote_execute(kwargs['dst'], dump_cmd, log_file=sys.stdout)
-                    #if rc:
-                    #    print rc
-                    yield tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.runs[run_no].get('dst'))
-                    # set tcpdump at dest for tests
                     if self.first_run:
-                        yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "add")
+                        self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "add")
                         self.first_run = False
                     else:
-                        yield self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
-                    yield self.run_test(tests.test_flowgrind, **kwargs)
+                        self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
 
-                    # set tcpdump at dest for tests
-                    info("Sleeping before terminating tcpddump")
-                    time.sleep(5)
-                    dump_cmd = "killall tcpdump"
-                    #dump_cmd = "dtach -A dtach.tcpdump killall tcpdump"
-                    #rc = yield self.remote_execute(kwargs['dst'], dump_cmd, log_file=sys.stdout)
-                    #if rc:
-                    #    print rc
-                    with settings(warn_only=True):
-                        yield tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=kwargs['dst'])
-                    # set tcpdump at dest for tests
+                    self.prepare_test(**kwargs)
+
 
                 # header for analyze script
                 for prefix in logs:
@@ -297,27 +375,26 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 time.sleep(2)
         self.count += 1
 
-    @defer.inlineCallbacks
     def run(self):
         pass
 
-    @defer.inlineCallbacks
     def run_all(self):
-        yield self.run()
-        yield self.tear_down()
-        reactor.stop()
+        self.run()
 
+        disconnect_all()
 
     @parallel
     def exec_sudo(self,cmd):
-        print (green(cmd))
-        sudo(cmd)
+        if self.args.dry_run:
+            print (yellow(cmd))
+        else:
+            print (yellow(cmd))
+            sudo(cmd)
 
     def main(self):
         self.parse_options()
         self.apply_options()
         self.run_all()
-        reactor.run()
 
 if __name__ == "__main__":
     TcpaNCRMeasurement().main()

@@ -21,8 +21,8 @@ else
 fi
 
 
-#MEASUREMENTS="scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10 scenario-1"
-MEASUREMENTS="scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10 scenario-1"
+MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10"
+#MEASUREMENTS="test"
 
 
 
@@ -36,22 +36,37 @@ if [ "$1" = "measure" ]; then
     LOG=$FOLDER/measurement-a.log
     ITR=$3
     ONE=1
+    echo -e "\n Requesting password for destination node. Might be needed if tcpdump is used\n"
+    read -s -p "Enter Password: " PASSWD
+
+    if [ -z "$PASSWD" ]; then
+        echo -e "\nError: Password is invalid\n"
+        exit 1
+    fi
+    ssh puneeth@192.168.5.1 "echo "$PASSWD"| sudo -S uname -a"
+
     mkdir $FOLDER
 	echo -e "\nmeasurements\n=========================" | tee -a $LOG
-#    for i in {1..$ITR}
-#    do
+    for i in `seq 1 $ITR`
+    do
         for measurement in `echo $MEASUREMENTS`;
         do
             echo -e "----- measurement: $FOLDER/$measurement ------" | tee -a $LOG
-            mkdir $FOLDER/${measurement}
+            if [ $i -eq 1 ]; then
+                mkdir $FOLDER/${measurement}
+                echo -e "\nCreating Directory: $FOLDER/$measurement\n=========================" | tee -a $LOG | tee $FOLDER/${measurement}/${measurement}.log
+            fi
+
             #reset topology
             build-net /home/puneeth/test/reset_dumbbell.conf
-#            ~/Development/tcp-eval/measurement/tcp-ancr_eval/$measurement.py pair.conf --iterations $ONE -l $FOLDER/${measurement} 2>&1 | tee -a $FOLDER/${measurement}/${measurement}.log
-            ~/Development/tcp-eval/measurement/tcp-ancr_eval/$measurement.py pair.conf --iterations $ITR -l $FOLDER/${measurement} 2>&1 | tee -a $FOLDER/${measurement}/${measurement}.log
-            #ssh puneeth@192.168.5.1 "cd /tmp && nohup tar -czvf ${measurement}.tar.gz *.pcap && cd - && cp /tmp/${measurement}.tar.gz $FOLDER/${measurement}"
-            ssh puneeth@192.168.5.1 "cd /tmp && nohup tar -czvf ${measurement}.tar.gz *.pcap && rm *.pcap"
+
+            #start measurement
+            ~/Development/tcp-eval/measurement/tcp-ancr_eval/new-scripts/$measurement.py pair.conf --iterations $ONE --offset $i -l $FOLDER/${measurement} 2>&1 | tee -a $FOLDER/${measurement}/${measurement}.log
+            ssh puneeth@192.168.5.1 "cd /tmp && nohup tar -czf ${measurement}-$i.tar.gz *.pcap"
+            ssh puneeth@192.168.5.1 "echo "$PASSWD"| sudo -S rm /tmp/*.pcap"
+            ssh puneeth@192.168.5.1 "cp /tmp/${measurement}-$i.tar.gz $FOLDER/${measurement}"
         done
-#    done
+    done
 fi
 
 if [ "$1" = "analyze" ]; then

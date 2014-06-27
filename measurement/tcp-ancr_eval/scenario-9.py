@@ -20,12 +20,13 @@ from twisted.internet import defer
 class Measurement(TcpaNCRMeasurement):
     @defer.inlineCallbacks
     def run(self):
+        self.first_run = True
 
         # App limit 20 Mbit/s
-        for scenario in scenarios:
+        for scenario in self.scenarios:
             scenario['flowgrind_opts'].extend(['-R', 's=20M'])
 
-        for itr in range(2):
+        for itr in range(self.iterations):
 
             # Variate ACKLoss, no congestion
             for ackloss in [0,1,2,3,5,7,10,15,20,25,30,35,40]:
