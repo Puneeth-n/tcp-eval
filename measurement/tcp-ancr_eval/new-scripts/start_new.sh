@@ -21,8 +21,9 @@ else
 fi
 
 
-MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10"
+#MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10"
 #MEASUREMENTS="test"
+MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8"
 
 
 
@@ -36,6 +37,7 @@ if [ "$1" = "measure" ]; then
     LOG=$FOLDER/measurement-a.log
     ITR=$3
     ONE=1
+    ABS=`pwd`
     echo -e "\n Requesting password for destination node. Might be needed if tcpdump is used\n"
     read -s -p "Enter Password: " PASSWD
 
@@ -64,7 +66,7 @@ if [ "$1" = "measure" ]; then
             ~/Development/tcp-eval/measurement/tcp-ancr_eval/new-scripts/$measurement.py pair.conf --iterations $ONE --offset $i -l $FOLDER/${measurement} 2>&1 | tee -a $FOLDER/${measurement}/${measurement}.log
             ssh puneeth@192.168.5.1 "cd /tmp && nohup tar -czf ${measurement}-$i.tar.gz *.pcap"
             ssh puneeth@192.168.5.1 "echo "$PASSWD"| sudo -S rm /tmp/*.pcap"
-            ssh puneeth@192.168.5.1 "cp /tmp/${measurement}-$i.tar.gz $FOLDER/${measurement}"
+            ssh puneeth@192.168.5.1 "mv /tmp/${measurement}-$i.tar.gz $ABS/$FOLDER/${measurement}"
         done
     done
 fi

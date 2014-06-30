@@ -22,7 +22,7 @@ class Measurement(TcpaNCRMeasurement):
 
         # App limit 20 Mbit/s
         for scenario in self.scenarios:
-            scenario['flowgrind_opts'] += ' -R s=20M'
+            scenario['flowgrind_opts'] += ' -R s=20Mb'
 
         for itr in range(self.iterations):
             # Variate RRate, no congestion

@@ -98,6 +98,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.config = ConfigParser.RawConfigParser()
         self.dictCharIp = dict()
         self.dictIpCount = defaultdict(list)
+        self.dictExpMgt = dict()
         self.count = 0
         self.delay = 20
         self.bnbw = 20
@@ -120,6 +121,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
         self.dictCharIp = {char:ip for char, ip in self.config.items("CONFIGURATION")}
         #print self.dictCharIp
+        self.dictExpMgt = {exp:mgt for exp, mgt in self.config.items("MANAGEMENT")}
 
         for char,ip in self.dictCharIp.items():
             self.dictIpCount[ip].append(char)
@@ -173,7 +175,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 #    sudo tc class %s dev eth0 parent 1: classid 1:2 htb rate %umbit" %(mode, bottleneckbw, mode, bottleneckbw)
                 tc_cmd = "sudo tc class change dev eth0 parent 1: classid 1:1 htb rate %umbit &&\
                     sudo tc class change dev eth0 parent 1: classid 1:2 htb rate %umbit" %(bottleneckbw, bottleneckbw)
-                tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=ip)
+                tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=self.dictExpMgt[ip])
 
             #Reverse path delay
             #if delay == 0:
@@ -201,9 +203,9 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 set_bck_cmd = True
 
             if set_fwd_cmd:
-                tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=ip)
+                tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
             if set_bck_cmd:
-                tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=ip)
+                tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=self.dictExpMgt[ip])
 
     def start_test(self, log_file, src, dst, duration=15, warmup=0, cc=None, dump=None,
             bport=5999, opts=[], flowgrind_opts = [], fg_bin="flowgrind", **kwargs):
@@ -254,7 +256,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
         if dump:
             # set tcpdump at dest for tests
             dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap &' %(src,self.logprefix)
-            tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst)
+            tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.dictExpMgt[dst])
             # set tcpdump at dest for tests
 
         if self.args.dry_run:
@@ -272,7 +274,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             time.sleep(5)
             dump_cmd = "killall tcpdump"
             with settings(warn_only=True):
-                tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst)
+                tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.dictExpMgt[dst])
         print (green("Finished test."))
 
     def prepare_test(self, append=False, **kwargs):
@@ -336,8 +338,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     else:
                         ts_cmd = "sudo sysctl -w net.ipv4.tcp_timestamps=0"
 
-                    pairs.append(kwargs['src'])
-                    pairs.append(kwargs['dst'])
+                    pairs.append(self.dictExpMgt[kwargs['src']])
+                    pairs.append(self.dictExpMgt[kwargs['dst']])
 
                     tasks.execute(self.exec_sudo, cmd=ts_cmd, hosts=pairs)
 

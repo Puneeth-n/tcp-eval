@@ -21,7 +21,7 @@ class Measurement(TcpaNCRMeasurement):
         self.first_run = True
         # App limit 20 Mbit/s
         for scenario in self.scenarios:
-            scenario['flowgrind_opts'] += " -R s=20M"
+            scenario['flowgrind_opts'] += " -R s=20Mb"
         for itr in range(self.iterations):
             # Variate RTT, no congestion
             for delay in [2.5,5,10,15,20,25,30,35,40,45,50]:
