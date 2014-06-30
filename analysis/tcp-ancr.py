@@ -120,8 +120,8 @@ class TCPaNCR_Analysis(Analysis):
             start_time = int(float(recordHeader["test_start_time"]))
         except KeyError:
             start_time = 0
-        #rtos           = record.calculate("total_rto_retransmits")
-        #frs            = record.calculate("total_fast_retransmits")
+        rtos           = record.calculate("total_rto_retransmits")
+        frs            = record.calculate("total_fast_retransmits")
         thruput        = record.calculate("thruput")
         try:
             rtt_avg        = record.calculate("rtt_avg")
@@ -134,7 +134,11 @@ class TCPaNCR_Analysis(Analysis):
             rtt_avg = rtt_avg / 1000
         else:
             rtt_avg = 0
+
         dsacks = record.calculate("total_dsacks")
+
+        if dsacks == None:
+            dsacks = 0
 
         if not thruput:
             if not self.failed.has_key(run_label):
@@ -145,17 +149,15 @@ class TCPaNCR_Analysis(Analysis):
         if thruput == 0:
             warn("Throughput is 0 in %s!" %record.filename)
 
-        #try:
-        #    rtos = int(rtos)
-        #except TypeError, inst:
-        #    rtos = "NULL"
-        rtos = 0
+        try:
+            rtos = int(rtos)
+        except TypeError, inst:
+            rtos = "NULL"
 
-        #try:
-        #    frs = int(frs)
-        #except TypeError, inst:
-        #    frs = "NULL"
-        frs = 0
+        try:
+            frs = int(frs)
+        except TypeError, inst:
+            frs = "NULL"
 
         # check for lost SYN or long connection establishing
         c = 0
@@ -169,6 +171,11 @@ class TCPaNCR_Analysis(Analysis):
                 warn("Long connection establishment (%ss): %s" %(flow_S['end'][c], record.filename))
         except:
             warn("calculate(flows) failed")
+
+        print  (variable, reordering, bnbw, qlimit, delay, rrate, rdelay,
+                     ackreor, ackloss, rtos, frs, iterationNo, scenarioNo, runNo,
+                     src, dst, thruput, rtt_avg, dsacks, start_time, run_label,
+                     scenario_label, test)
 
         debug("""
               INSERT INTO tests VALUES ("%s", "%s", %s, %u, %u, %u, %u, %u, %u, %s, %s, %u, %u,

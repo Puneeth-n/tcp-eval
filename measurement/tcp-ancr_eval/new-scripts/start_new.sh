@@ -78,17 +78,17 @@ if [ "$1" = "analyze" ]; then
     db=data.sqlite
 	echo -e "\ncreating pdf\n=========================" | tee -a $LOG
     cd $FOLDER
-    ANALYZE= `ls -d *`
+    ANALYZE=$(ls -d */)
     cd -
     echo $ANALYZE
-    exit 0
-    for measurement in `echo $ANALYSIS`;
+    #exit 0
+    for measurement in `echo $ANALYZE`;
     do
         echo -e "----- analyze: $FOLDER/$measurement ------" | tee -a $LOG
 	    cd $FOLDER/${measurement}
-        #rm data.sqlite
-#       echo -e "backing up old database into data.sqlite.old\n"
-#       mv data.sqlite data.sqlite.old
+        rm data.sqlite
+       #echo -e "backing up old database into data.sqlite.old\n"
+       #mv data.sqlite data.sqlite.old
 
         $ANALYSIS --debug -o test --save -t congestion -e bnbw
 

@@ -202,7 +202,7 @@ class FlowgrindRecordFactory():
             "(?P<castate>loss|open|disorder|recover)\s+"\
             "(?P<mss>\d+)\s+(?P<mtu>\d+)\s+"\
             # optional extension -wolff
-            #"((?P<cret>\d+)\s+(?P<cfret>\d+)\s+(?P<ctret>\d+)\s+(?P<dupthresh>\d+)\s+(?P<lrs>\d+)\s+(?P<tdsac>\d+)\s*)?",
+            "((?P<cret>\d+)\s+(?P<cfret>\d+)\s+(?P<ctret>\d+)\s+(?P<dupthresh>\d+)\s+(?P<lrs>\d+)\s+(?P<tdsac>\d+)\s*)?",
             # # Sat Dec 11 08:20:49 2010: controlling host = vmhost1, number of flows = 2, reporting interval = 0.05s, [through] = 10**6 bit/second (SVN Rev 6756)
             #
             "^# (?P<test_start_time>(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (?:|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2} \d{2}:\d{2}:\d{2} \d{4}): .* reporting interval = (?P<reporting_interval>\d+\.\d+)"
@@ -231,8 +231,8 @@ class FlowgrindRecordFactory():
             rtt_max           = lambda r: max(map(float, r['s_rtt_max'])),
             rtt_avg           = lambda r: average(map(float, r['s_rtt_avg'])),
             total_retransmits      = lambda r: max(map(extInt, r['cret'])),
-            #total_fast_retransmits = lambda r: max(map(extInt, r['cfret'])),
-            #total_rto_retransmits  = lambda r: max(map(extInt, r['ctret'])),
+            total_fast_retransmits = lambda r: max(map(extInt, r['cfret'])),
+            total_rto_retransmits  = lambda r: max(map(extInt, r['ctret'])),
             total_dsacks           = lambda r: max(map(extInt, r['tdsac'])),
             # list of summary lines
             thruput_list      = lambda r: map(float, r['s_thruput_out']),
