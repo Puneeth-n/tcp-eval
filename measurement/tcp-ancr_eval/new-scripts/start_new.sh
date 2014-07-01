@@ -22,8 +22,9 @@ fi
 
 
 #MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10"
+MEASUREMENTS="scenario-1"
 #MEASUREMENTS="test"
-MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8"
+#MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8"
 
 
 
@@ -60,7 +61,7 @@ if [ "$1" = "measure" ]; then
             fi
 
             #reset topology
-            build-net /home/puneeth/test/reset_dumbbell.conf
+            build-net /home/puneeth/test/reset_dumbbell.conf -s 
 
             #start measurement
             ~/Development/tcp-eval/measurement/tcp-ancr_eval/new-scripts/$measurement.py pair.conf --iterations $ONE --offset $i -l $FOLDER/${measurement} 2>&1 | tee -a $FOLDER/${measurement}/${measurement}.log

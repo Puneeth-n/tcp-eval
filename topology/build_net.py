@@ -45,6 +45,8 @@ import fabric.state
 from common.application import Application
 from common.functions import *
 
+pairs = []
+nodes = []
 env.hosts = []
 env.username = 'puneeth'
 env.password = 'test'
@@ -75,7 +77,7 @@ class BuildNet(Application):
                 match ip dst %(dst)s""")
         self.shapecmd = textwrap.dedent("""\
                 tc class add dev %(iface)s parent 1: classid 1:%(nr)d htb rate %(rate)smbit && \
-                tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
+                tc filter add dev %(iface)s parent 1: protocol ip prio 1 u32 \
                 flowid 1:%(nr)d \
                 match ip src %(src)s""")
 #                match ip protocol 1 0xff flowid 1:%(nr)d \
@@ -131,7 +133,7 @@ class BuildNet(Application):
                 help="Set up equal cost multipath routes with maximal "\
                         "'%(metavar)s' of parallel paths (default: %(const)s)")
         self.parser.add_argument("-R", "--rate", metavar="RATE", action="store",
-                default="100",help="Rate limit in mbps")
+                default="1000",help="Rate limit in mbps")
         self._topology_group=self.parser.add_mutually_exclusive_group()
         self._topology_group.add_argument("-e", "--multiple-topology",
                 action="store_true", default=False, dest="multiple_topology",
@@ -174,6 +176,11 @@ class BuildNet(Application):
                 self.hosts_m[key] = self.config.get(str(key),"mip")
                 self.hosts_e[key] = self.config.get(str(key),"eip")
                 env.hosts.append(self.hosts_m[key])
+                if self.config.get(str(key),"type") not in ('src', 'dst'):
+                    nodes.append(self.hosts_m[key])
+                    print self.hosts_m[key]
+                else:
+                    pairs.append(self.hosts_m[key])
             except:
                 print(red("In Node %s some/all option(s) missing"%(key)))
                 exit(1)
@@ -379,11 +386,13 @@ class BuildNet(Application):
         # It is ok if the deletion of queuing discipline fails. If the intended
         #queueing discipline wasn't created by the script, the deletion fails.
         with settings(warn_only=True):
-            tasks.execute(self.exec_sudo, cmd=cmd_1, hosts=env.hosts)
+            tasks.execute(self.exec_sudo, cmd=cmd_1, hosts=nodes)
+            tasks.execute(self.exec_sudo, cmd=cmd_1, hosts=pairs)
         #cmd_2 shouldn't fail. Abort if any of the fabric scripts fail in the script
-        tasks.execute(self.exec_sudo, cmd=cmd_2, hosts=env.hosts)
+        tasks.execute(self.exec_sudo, cmd=cmd_2, hosts=nodes)
 
-        for hostaddr in env.hosts:
+        for hostaddr in nodes:
+
             self.hostnum = self.get_host(hostaddr)
             peers = self.conf.get(self.hostnum, set())
 
