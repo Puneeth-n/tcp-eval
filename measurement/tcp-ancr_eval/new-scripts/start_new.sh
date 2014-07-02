@@ -30,7 +30,7 @@ MEASUREMENTS="scenario-1"
 
 if [ "$1" = "init" ]; then
 	echo -e "\nCreating topology\n=========================" | tee $LOG
-    build-net /home/puneeth/test/reset_dumbbell.conf
+    build-net /home/puneeth/test/reset_dumbbell.conf -t -s
 fi
 
 if [ "$1" = "measure" ]; then
@@ -42,16 +42,18 @@ if [ "$1" = "measure" ]; then
     echo -e "\n Requesting password for destination node. Might be needed if tcpdump is used\n"
     read -s -p "Enter Password: " PASSWD
 
-    if [ -z "$PASSWD" ]; then
-        echo -e "\nError: Password is invalid\n"
-        exit 1
-    fi
     ssh puneeth@192.168.5.1 "echo "$PASSWD"| sudo -S uname -a"
 
     mkdir $FOLDER
 	echo -e "\nmeasurements\n=========================" | tee -a $LOG
     for i in `seq 1 $ITR`
     do
+        if [ $i -eq 1 ]; then
+            #reset static routes on topology
+            #Traffic shaping is done internally by the measurement script based on the pairs mentioned in the pair file
+            build-net /home/puneeth/test/reset_dumbbell.conf -s 
+        fi
+
         for measurement in `echo $MEASUREMENTS`;
         do
             echo -e "----- measurement: $FOLDER/$measurement ------" | tee -a $LOG
@@ -59,9 +61,6 @@ if [ "$1" = "measure" ]; then
                 mkdir $FOLDER/${measurement}
                 echo -e "\nCreating Directory: $FOLDER/$measurement\n=========================" | tee -a $LOG | tee $FOLDER/${measurement}/${measurement}.log
             fi
-
-            #reset topology
-            build-net /home/puneeth/test/reset_dumbbell.conf -s 
 
             #start measurement
             ~/Development/tcp-eval/measurement/tcp-ancr_eval/new-scripts/$measurement.py pair.conf --iterations $ONE --offset $i -l $FOLDER/${measurement} 2>&1 | tee -a $FOLDER/${measurement}/${measurement}.log

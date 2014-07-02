@@ -137,62 +137,71 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.iterations = self.args.iterations
         self.offset = self.args.offset
 
-    def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode):
+    def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode, **kwargs):
 
         info("Setting netem..")
 
         for ip, chars in self.dictIpCount.items():
-            fwd_cmd = "sudo tc qdisc %s dev eth0 parent 1:2 handle 20: netem" %mode
-            bck_cmd = "sudo tc qdisc %s dev eth0 parent 1:1 handle 10: netem" %mode
+
+            fwd_cmd = "tc qdisc add dev eth0 parent 1:2 handle 20: netem"
+            bck_cmd = "tc qdisc add dev eth0 parent 1:1 handle 10: netem"
             set_fwd_cmd = False
             set_bck_cmd = False
 
+            cmd = 'tc qdisc del dev eth0 root && tc qdisc add dev eth0 root handle 1: htb'
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=("%s")%self.dictExpMgt[ip])
+
+            cmd = """tc class add dev eth0 parent 1: classid 1:1 htb rate 1000mbit &&
+                tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:1 match ip src %s""" %(kwargs['dst'])
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
+
+            cmd = """tc class add dev eth0 parent 1: classid 1:2 htb rate 1000mbit &&
+                tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:2 match ip src %s""" %(kwargs['src'])
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
+
+            #bottleneck bandwidth
+            if 'qlnode' in chars:
+                if bottleneckbw:
+                    tc_cmd = """tc class change dev eth0 parent 1: classid 1:1 htb rate %umbit &&
+                            tc class change dev eth0 parent 1: classid 1:2 htb rate %umbit""" %(bottleneckbw, bottleneckbw)
+                    tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=self.dictExpMgt[ip])
+
+                if limit:
+                    fwd_cmd += " limit %u" %limit
+                    bck_cmd += " limit %u" %limit
+                    #assuming that the qlnode has just bottleneck and queue limit constraints, the command is executed here
+                    tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
+                    tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=self.dictExpMgt[ip])
+                continue
+
             #forward path delay
-            #if delay == 0:
-            #    fwd_cmd += " delay 0%"
-            #elif 'fdnode' in chars and not delay == None:
-            if 'fdnode' in chars and delay:
-                fwd_cmd += " delay %ums %ums 20%%" %(delay, (int)(delay * 0.1))
+            if 'fdnode' in chars:
+                if delay:
+                    fwd_cmd += " delay %ums" %(delay)
+                else:
+                    fwd_cmd += " delay %ums" %(self.delay)
                 set_fwd_cmd = True
 
             #forward path reordering
-            #if reorder == 0:
-            #    fwd_cmd += " reorder 0%"
-            #elif 'fdnode' in chars and not reorder == None:
-            if 'fdnode' in chars and reorder:
-                fwd_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(reorder, (rdelay + delay), (int)(rdelay * 0.1))
+            #Assuming that I am booting a reorder only kernel in one of the nodes which exclusively does reordering.
+            if 'frnode' in chars and reorder:
+                fwd_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(reorder, (rdelay), (int)(rdelay * 0.1))
                 set_fwd_cmd = True
-
-            if 'qlnode' in chars and limit:
-                fwd_cmd += " limit %u" %limit
-                bck_cmd += " limit %u" %limit
-                set_fwd_cmd = True
-                set_bck_cmd = True
-
-            #bottleneck bandwidth
-            if 'qlnode' in chars and bottleneckbw:
-                #tc_cmd = "sudo tc class %s dev eth0 parent 1: classid 1:1 htb rate %umbit; \
-                #    sudo tc class %s dev eth0 parent 1: classid 1:2 htb rate %umbit" %(mode, bottleneckbw, mode, bottleneckbw)
-                tc_cmd = "sudo tc class change dev eth0 parent 1: classid 1:1 htb rate %umbit &&\
-                    sudo tc class change dev eth0 parent 1: classid 1:2 htb rate %umbit" %(bottleneckbw, bottleneckbw)
-                tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=self.dictExpMgt[ip])
 
             #Reverse path delay
-            #if delay == 0:
-            #    fwd_cmd += " delay 0%"
-            #elif 'rdnode' in chars and not delay == None:
-            if 'rdnode' in chars and delay:
+            if 'rdnode' in chars:
                 # if .5 values are used for delay, account for it by setting forward path one too low, and reverse path one too high
-                if (delay % 1) != 0:
-                    delay += 1
-                bck_cmd += " delay %ums %ums 20%%" %(delay, (int)(delay * 0.1))
+                if delay:
+                    if (delay % 1) != 0:
+                        delay += 1
+                        bck_cmd += " delay %ums" %(delay+1)
+                    else:
+                        bck_cmd += " delay %ums" %(delay)
+                else:
+                    bck_cmd += " delay %ums" %(self.delay)
                 set_bck_cmd = True
 
             #Reverse path reordering
-            #if ackreor == 0:
-            #    bck_cmd += " reorder 0%"
-            #elif 'rrnode' in chars and not ackreor == None:
-#            if 'rrnode' in chars and not ackreor == None:
             if 'rrnode' in chars and ackreor:
                 bck_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(ackreor, (rdelay + delay), (int)(rdelay * 0.1))
                 set_bck_cmd = True
@@ -202,12 +211,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 bck_cmd += " drop %u%%" %(ackloss)
                 set_bck_cmd = True
 
-            if set_fwd_cmd:
-                tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
             if set_bck_cmd:
                 tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=self.dictExpMgt[ip])
+            if set_fwd_cmd:
+                tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
 
-    def start_test(self, log_file, src, dst, duration=15, warmup=0, cc=None, dump=None,
+    def start_test(self, log_file, src, dst, src_ctrl, dst_ctrl, duration=15, warmup=0, cc=None, dump=None,
             bport=5999, opts=[], flowgrind_opts = [], fg_bin="flowgrind", **kwargs):
         """This test performs a simple flowgrind (new, aka dd version) test with
           one tcp flow from src to dst.
@@ -244,7 +253,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             cmd += " -O s=TCP_CONG_MODULE=%s" % (cc)
 
         # build host specifiers
-        cmd += " -H s=%s,d=%s" %(src, dst)
+        cmd += " -H s=%s/%s,d=%s/%s" %(src, src_ctrl, dst, dst_ctrl)
 
         # just add additional parameters
         if opts:
@@ -256,7 +265,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
         if dump:
             # set tcpdump at dest for tests
             dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap &' %(src,self.logprefix)
-            tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.dictExpMgt[dst])
+            tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst_ctrl)
             # set tcpdump at dest for tests
 
         if self.args.dry_run:
@@ -334,9 +343,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     # Timestamps.. dirty solution
                     ts_cmd = ""
                     if (self.scenarios[scenario_no]["scenario_label"] == "Native Linux TS"):
-                        ts_cmd = "sudo sysctl -w net.ipv4.tcp_timestamps=1"
+                        ts_cmd = "sysctl -w net.ipv4.tcp_timestamps=1"
                     else:
-                        ts_cmd = "sudo sysctl -w net.ipv4.tcp_timestamps=0"
+                        ts_cmd = "sysctl -w net.ipv4.tcp_timestamps=0"
+
+                    kwargs['src_ctrl'] = self.dictExpMgt[kwargs['src']]
+                    kwargs['dst_ctrl'] = self.dictExpMgt[kwargs['dst']]
 
                     pairs.append(self.dictExpMgt[kwargs['src']])
                     pairs.append(self.dictExpMgt[kwargs['dst']])
@@ -347,11 +359,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     # actually run tests
                     info("run test %s" %self.logprefix)
 
-                    if self.first_run:
-                        self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "add")
-                        self.first_run = False
-                    else:
-                        self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change")
+                    #if self.first_run:
+                    #    self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "add", **kwargs)
+                    #    self.first_run = False
+                    #else:
+                    #    self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change", **kwargs)
+                    self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change", **kwargs)
 
                     self.prepare_test(**kwargs)
 

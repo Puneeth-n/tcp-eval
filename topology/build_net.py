@@ -50,6 +50,7 @@ nodes = []
 env.hosts = []
 env.username = 'puneeth'
 env.password = 'test'
+env.key_filename = "~/.ssh/id_rsa"
 env.colorize_errors = True
 env.warn_only = False
 
@@ -128,6 +129,9 @@ class BuildNet(Application):
         self.parser.add_argument("-s", "--static-routes", action="store_true",
                 dest="static_routes", default=False, help="Setup static routing "\
                  "according to topology")
+        self.parser.add_argument("-t", "--traffic-shape", action="store_true",
+                dest="tc", default=False, help="""Setup traffic shaping on the 
+                topology""")
         self.parser.add_argument("-p", "--multipath", metavar="NUM",
                 action="store", nargs="?", type=int, const="2", default=False,
                 help="Set up equal cost multipath routes with maximal "\
@@ -178,7 +182,6 @@ class BuildNet(Application):
                 env.hosts.append(self.hosts_m[key])
                 if self.config.get(str(key),"type") not in ('src', 'dst'):
                     nodes.append(self.hosts_m[key])
-                    print self.hosts_m[key]
                 else:
                     pairs.append(self.hosts_m[key])
             except:
@@ -573,13 +576,14 @@ class BuildNet(Application):
         """Main method of the Buildmesh object"""
 
         # don't print graph option --quiet was given
-        if self.args.verbose or self.args.debug:
+        if self.args.verbose or self.args.debug or self.args.dry_run:
             self.visualize(self.conf)
 
-        info(yellow("Setting up traffic shaping ... "))
-        self.setup_trafficcontrol()
+        if self.args.tc or self.args.dry_run:
+            info(yellow("Setting up traffic shaping ... "))
+            self.setup_trafficcontrol()
 
-        if self.args.static_routes:
+        if self.args.static_routes or self.args.dry_run:
             info(yellow("Setting up static routing..."))
             self.setup_routing()
 

@@ -25,7 +25,7 @@ class Measurement(TcpaNCRMeasurement):
                 qlen = int((2 * self.delay * bnbw)/11.44)+1
 
                 # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-                self.run_measurement("congestion", "bnbw", 0, 0, 20, 20, 0, qlen, bnbw)
+                self.run_measurement("congestion", "bnbw", 0, 0, 0, 20, 0, qlen, bnbw)
 
 if __name__ == "__main__":
     Measurement().main()
