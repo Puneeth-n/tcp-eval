@@ -292,7 +292,7 @@ class UmLatex():
 
             # crop pdf
             info("Run pdfcrop on %s..." %figure)
-            cmd = "pdfcrop %s %s" %(splitPDF, cropPDF)
+            cmd = "pdfcrop --margins 1 0 0 0 %s %s" %(splitPDF, cropPDF)
             if self.__debug:
                 call(cmd)
             else:

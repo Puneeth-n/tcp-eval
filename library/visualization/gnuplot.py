@@ -99,7 +99,7 @@ class UmGnuplot():
         # offset may be changed
         self.xaxislabeloffset = 0,0.3
         #self.yaxislabeloffset = 2.0,0
-        self.yaxislabeloffset = 0.5,0
+        self.yaxislabeloffset = 0.75,0
 
         # latex object
         save_name = "main.tex"
