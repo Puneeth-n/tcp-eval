@@ -143,21 +143,22 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
         for ip, chars in self.dictIpCount.items():
 
-            fwd_cmd = "tc qdisc add dev eth0 parent 1:2 handle 20: netem"
-            bck_cmd = "tc qdisc add dev eth0 parent 1:1 handle 10: netem"
+            fwd_cmd = "tc qdisc %s dev eth0 parent 1:2 handle 20: netem" %(mode)
+            bck_cmd = "tc qdisc %s dev eth0 parent 1:1 handle 10: netem" %(mode)
             set_fwd_cmd = False
             set_bck_cmd = False
 
-            cmd = 'tc qdisc del dev eth0 root && tc qdisc add dev eth0 root handle 1: htb'
-            tasks.execute(self.exec_sudo, cmd=cmd, hosts=("%s")%self.dictExpMgt[ip])
+            if mode == 'add':
+                cmd = 'tc qdisc del dev eth0 root && tc qdisc add dev eth0 root handle 1: htb'
+                tasks.execute(self.exec_sudo, cmd=cmd, hosts=("%s")%self.dictExpMgt[ip])
 
-            cmd = """tc class add dev eth0 parent 1: classid 1:1 htb rate 1000mbit &&
-                tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:1 match ip src %s""" %(kwargs['dst'])
-            tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
+                cmd = """tc class add dev eth0 parent 1: classid 1:1 htb rate 1000mbit &&
+                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:1 match ip src %s""" %(kwargs['dst'])
+                tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
 
-            cmd = """tc class add dev eth0 parent 1: classid 1:2 htb rate 1000mbit &&
-                tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:2 match ip src %s""" %(kwargs['src'])
-            tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
+                cmd = """tc class add dev eth0 parent 1: classid 1:2 htb rate 1000mbit &&
+                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:2 match ip src %s""" %(kwargs['src'])
+                tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
 
             #bottleneck bandwidth
             if 'qlnode' in chars:
@@ -359,12 +360,11 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     # actually run tests
                     info("run test %s" %self.logprefix)
 
-                    #if self.first_run:
-                    #    self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "add", **kwargs)
-                    #    self.first_run = False
-                    #else:
-                    #    self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change", **kwargs)
-                    self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change", **kwargs)
+                    if self.first_run:
+                        self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "add", **kwargs)
+                        self.first_run = False
+                    else:
+                        self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change", **kwargs)
 
                     self.prepare_test(**kwargs)
 
