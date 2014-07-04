@@ -204,6 +204,9 @@ class FlowgrindRecordFactory():
             # optional extension -wolff
             "((?P<cret>\d+)\s+(?P<cfret>\d+)\s+(?P<ctret>\d+)\s+(?P<dupthresh>\d+)\s+(?P<lrs>\d+)\s+(?P<tdsac>\d+)\s*)?",
             # # Sat Dec 11 08:20:49 2010: controlling host = vmhost1, number of flows = 2, reporting interval = 0.05s, [through] = 10**6 bit/second (SVN Rev 6756)
+            # puneeth this regex should be fine actually fine! But since I don't want to undo flowgrind.. . I am keeping it!
+            # If not aall plots are generated compare the flowgrind log output and this regex!
+            #"((?P<cret>\d+)\s+(?P<cfret>\d+)\s+(?P<ctret>\d+)\s+(?P<dupthresh>\d+)\s*)?",
             #
             "^# (?P<test_start_time>(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (?:|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2} \d{2}:\d{2}:\d{2} \d{4}): .* reporting interval = (?P<reporting_interval>\d+\.\d+)"
         ]
