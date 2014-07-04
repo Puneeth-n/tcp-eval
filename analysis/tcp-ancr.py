@@ -69,7 +69,7 @@ class TCPaNCR_Analysis(Analysis):
         self.plotlabels["delay"]   = r"Round-Trip Time [$\\si{\\milli\\second}$]"
         self.plotlabels["ackreor"] = r"ACK Reordering Rate [$\\si{\\percent}$]"
         self.plotlabels["ackloss"] = r"ACK Loss Rate [$\\si{\\percent}$]"
-        self.plotlabels["rtt_avg"] = r"Aplication Layer RTT [$\\si{\\second}$]"
+        self.plotlabels["rtt_avg"] = r"Application Layer RTT [$\\si{\\second}$]"
         self.plotlabels["dsacks"]  = r"Spurious Retransmissions [$\\#$]"
 
     def apply_options(self):

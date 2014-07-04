@@ -62,19 +62,21 @@ class UmGnuplot():
 
         # colors and line styles
         self.gplot(textwrap.dedent("""
-        set style line  1 lt rgb "#DC143C" lw 1 pt 7 ps 1 #Crimson
-        set style line  2 lt rgb "#008000" lw 1 pt 7 ps 1 #Green
-        set style line  3 lt rgb "#1E90FF" lw 1 pt 7 ps 1 #DodgerBlue
-        set style line  4 lt rgb "#FF8C00" lw 1 pt 7 ps 1 #DarkOrange
-        set style line  5 lt rgb "#DA70D6" lw 1 pt 7 ps 1 #Orchid
-        set style line  6 lt rgb "#B22222" lw 1 pt 7 ps 1 #FireBrick
+        set style line 21 lt rgb "#DC143C" lw 1 pt 7 ps 1 #Crimson
+        set style line 22 lt rgb "#008000" lw 1 pt 7 ps 1 #Green
+        set style line 23 lt rgb "#1E90FF" lw 1 pt 7 ps 1 #DodgerBlue
+        set style line 24 lt rgb "#FF8C00" lw 1 pt 7 ps 1 #DarkOrange
+        set style line 25 lt rgb "#DA70D6" lw 1 pt 7 ps 1 #Orchid
         set style line  7 lt rgb "#9ACD32" lw 1 pt 7 ps 1 #YellowGreen
         set style line  8 lt rgb "#6495ED" lw 1 pt 7 ps 1 #CornflowerBlue
         set style line  9 lt rgb "#808000" lw 1 pt 7 ps 1 #Olive
         set style line 10 lt rgb "#C71585" lw 1 pt 7 ps 1 #MediumVioletRed
-        set style line 11 lt rgb "#8B0000" lw 1 pt 7 ps 1 #DarkRed
-        set style line 12 lt rgb "#006400" lw 1 pt 7 ps 1 #DarkGreen
-        set style line 13 lt rgb "#00008B" lw 1 pt 7 ps 1 #DarkBlue
+        set style line  1 lt rgb "#8B0000" lw 1 pt 2 ps 1 #DarkRed
+        set style line  2 lt rgb "#8B0000" lw 1 pt 6 ps 1 #DarkRed
+        set style line  3 lt rgb "#006400" lw 1 pt 2 ps 1 #DarkGreen
+        set style line  4 lt rgb "#006400" lw 1 pt 6 ps 1 #DarkGreen
+        set style line  5 lt rgb "#00008B" lw 1 pt 6 ps 1 #DarkBlue
+        set style line  6 lt rgb "#00008B" lw 1 pt 2 ps 1 #DarkBlue
         set style line 14 lt rgb "#B8860B" lw 1 pt 7 ps 1 #DarkGoldenrod
         set style line 15 lt rgb "#9932CC" lw 1 pt 7 ps 1 #DarkOrchid
         set style line 16 lt rgb "#6B8E23" lw 1 pt 7 ps 1 #OliveDrab
@@ -91,12 +93,13 @@ class UmGnuplot():
         set boxwidth 0.8 relative
         set clip points
         set style fill solid 1.00 border -1
-        set key on right top box lt rgb "gray50" samplen 3 width -4 spacing 1.05
+        set key on left top box lt rgb "gray50" samplen 3 width -4 spacing 1.05
         """))
 
         # offset may be changed
         self.xaxislabeloffset = 0,0.3
-        self.yaxislabeloffset = 2.0,0
+        #self.yaxislabeloffset = 2.0,0
+        self.yaxislabeloffset = 0.75,0
 
         # latex object
         save_name = "main.tex"
