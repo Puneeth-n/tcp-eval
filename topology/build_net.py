@@ -431,9 +431,12 @@ class BuildNet(Application):
                     netem_str = 'tc qdisc add dev %s parent 1:%d%02d handle %d%02d: netem' % (iface, parent_num, i, parent_num, i)
                 else:
                     if self.hostnum < p:
-                        addr = self.hosts_e[1]
+                        addr = self.hosts_e[min(map(int,self.hosts_e))]
                     else:
-                        addr = self.hosts_e[5]
+                        #Puneeth: this is the shittiest solution. remove it!
+                        #I wonder why I did it this way!
+                        #Use the config file type to assign values
+                        addr = self.hosts_e[max(map(int,self.hosts_e))]
 
                     cmd = self.shapecmd % {
                         'iface' : iface,

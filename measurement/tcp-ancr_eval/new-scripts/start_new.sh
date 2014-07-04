@@ -21,8 +21,8 @@ else
 fi
 
 
-#MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10"
-MEASUREMENTS="scenario-1"
+MEASUREMENTS="scenario-1 scenario-2 scenario-2-rd30 scenario-2-rr4 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10"
+#MEASUREMENTS="scenario-1"
 #MEASUREMENTS="test"
 #MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8"
 
