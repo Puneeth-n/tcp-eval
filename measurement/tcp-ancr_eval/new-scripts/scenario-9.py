@@ -30,7 +30,7 @@ class Measurement(TcpaNCRMeasurement):
             for ackloss in [0,1,2,3,5,7,10,15,20,25,30,35,40]:
 
                 # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-                self.run_measurement("reordering", "ackloss", 2, 0, 20, 20, ackloss, 1000, 100)
+                self.run_measurement("reordering", "ackloss", 2, 0, 20, 20, ackloss, None, None)
 
 if __name__ == "__main__":
     Measurement().main()

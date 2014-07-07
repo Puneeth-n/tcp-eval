@@ -29,7 +29,7 @@ class Measurement(TcpaNCRMeasurement):
             for rdelay in [5,10,15,20,25,30,35,40,45,50,60,70,80]:
 
                 # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckb
-                self.run_measurement("reordering", "rdelay", 2, 0, rdelay, 20, 0, 1000, 100)
+                self.run_measurement("reordering", "rdelay", 2, 0, rdelay, 20, 0, None, None)
 
 if __name__ == "__main__":
     Measurement().main()

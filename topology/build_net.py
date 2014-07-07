@@ -388,7 +388,10 @@ class BuildNet(Application):
 
         # It is ok if the deletion of queuing discipline fails. If the intended
         #queueing discipline wasn't created by the script, the deletion fails.
-        with settings(warn_only=True):
+        with settings(
+                hide('stdout'),
+                show('warnings', 'running', 'stderr'),
+                warn_only=True):
             tasks.execute(self.exec_sudo, cmd=cmd_1, hosts=nodes)
             tasks.execute(self.exec_sudo, cmd=cmd_1, hosts=pairs)
         #cmd_2 shouldn't fail. Abort if any of the fabric scripts fail in the script

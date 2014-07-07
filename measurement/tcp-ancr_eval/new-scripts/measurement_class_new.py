@@ -38,7 +38,6 @@ from measurement import measurement, tests
 # common options used for all ntests
 opts = dict(fg_bin="~/bin/flowgrind", duration=10, dump=True)
 
-delay = 20
 # repeat loop
 iterations = range(1)
 
@@ -55,7 +54,7 @@ env.key_filename = "~/.ssh/id_rsa"
 env.password = 'test'
 env.colorize_errors = True
 env.warn_only = False
-
+env.skip_bad_hosts = True
 
 class TcpaNCRMeasurement(measurement.Measurement):
     """This Measurement will run tests of several scenarios:
@@ -91,7 +90,6 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 default=False, dest="dry_run",
                 help="Test the config only without setting it up")
 
-        self.delay = delay
         self.later_args_list = []
 
         # initialization of the config parser
@@ -178,9 +176,9 @@ class TcpaNCRMeasurement(measurement.Measurement):
             #forward path delay
             if 'fdnode' in chars:
                 if delay:
-                    fwd_cmd += " delay %ums" %(delay)
+                    fwd_cmd += " rate 1000mbit delay %ums %ums 20%" %(delay, (0.1*delay))
                 else:
-                    fwd_cmd += " delay %ums" %(self.delay)
+                    fwd_cmd += " rate 1000mbit delay %ums %ums 20%" %(self.delay, (0.1*self.delay))
                 set_fwd_cmd = True
 
             #forward path reordering
@@ -195,11 +193,11 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 if delay:
                     if (delay % 1) != 0:
                         delay += 1
-                        bck_cmd += " delay %ums" %(delay+1)
+                        bck_cmd += " rate 1000mbit delay %ums %ums 20%" %((delay+1), (0.1*delay))
                     else:
-                        bck_cmd += " delay %ums" %(delay)
+                        bck_cmd += " rate 1000mbit delay %ums %ums 20%" %((delay), (0.1*delay))
                 else:
-                    bck_cmd += " delay %ums" %(self.delay)
+                    bck_cmd += " rate 1000mbit delay %ums %ums 20%" %((self.delay), (0.1*self.delay))
                 set_bck_cmd = True
 
             #Reverse path reordering

@@ -27,7 +27,7 @@ class Measurement(TcpaNCRMeasurement):
             for delay in [2.5,5,10,15,20,25,30,35,40,45,50]:
 
                 # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-                self.run_measurement("reordering", "delay", 2, 0, 5, delay, 0, 1000, 100)
+                self.run_measurement("reordering", "delay", 2, 0, 5, delay, 0, 1000, None)
 
 if __name__ == "__main__":
     Measurement().main()
