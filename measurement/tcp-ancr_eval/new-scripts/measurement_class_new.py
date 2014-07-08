@@ -36,7 +36,7 @@ import fabric.state
 # tcp-eval imports
 from measurement import measurement, tests
 # common options used for all ntests
-opts = dict(fg_bin="~/bin/flowgrind", duration=120, dump=True)
+opts = dict(fg_bin="~/bin/flowgrind", dump=True)
 
 # repeat loop
 iterations = range(1)
@@ -83,14 +83,16 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.parser.add_argument("pairfile", metavar="FILE", type=str,
                                  help="Set file to load node pairs from")
         self.parser.add_argument("-i", "--iterations", metavar="NUM",
-                action="store", type=int, default="10", help="Iterations (default: 10)")
+                action="store", type=int, default="1", help="Iterations (default: 10)")
+        self.parser.add_argument("-t", "--time", metavar="NUM",
+                action="store", type=int, default="120", help="Flowgrind time (default: 120s)")
         self.parser.add_argument("-o", "--offset", metavar="NUM",
-                action="store", type=int, default="0", help="""offset used to 
-                prefix log files(default: 0) Should be SET when iterating on all 
+                action="store", type=int, default="0", help="""offset used to
+                prefix log files(default: 0) Should be SET when iterating on all
                 scenarios repeatedly to ensure log files are not overwritten.""")
         self.parser.add_argument("-y", "--dry-run", action="store_true",
                 default=False, dest="dry_run",
-                help="Test the config only without setting it up")
+                help="Test the pairs file without starting the experiment")
 
         self.later_args_list = []
 
@@ -304,14 +306,14 @@ class TcpaNCRMeasurement(measurement.Measurement):
         else:
             log_file = open(log_path, 'w')
 
-        # write config into logfile 
+        # write config into logfile
         for item in kwargs.iteritems():
             log_file.write("%s=%s\n" %item)
         log_file.write("test_start_time=%s\n" %time.time())
         log_file.write("BEGIN_TEST_OUTPUT\n")
         log_file.flush()
 
-        # actually run test 
+        # actually run test
         info("Starting test test_flowgrind with: %s", kwargs)
         self.start_test(log_file, **kwargs)
         #self._update_stats("test_flowgrind",rc)
@@ -334,6 +336,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
                     # use a different port for every test
                     kwargs['bport'] = int("%u%u%02u" %(scenario_no + 1, self.count, run_no))
+                    kwargs['duration'] = self.args.time
 
                     # set logging prefix, tests append _testname
                     self.logprefix="i%u%03u_s%u_r%u" % (self.offset,self.count, scenario_no, run_no)
@@ -368,28 +371,28 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     else:
                         self.run_netem(reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, "change", **kwargs)
 
-                    self.prepare_test(**kwargs)
+                    if not self.args.dry_run:
+                        self.prepare_test(**kwargs)
 
+                        # header for analyze script
+                        for prefix in logs:
+                            logfile = open("%s/%s_test_flowgrind" %(self.args.log_dir, prefix), "r+")
+                            old = logfile.read() # read everything in the file
+                            logfile.seek(0) # rewind
+                            logfile.write("""testbed_param_qlimit=%u\n""" \
+                                """testbed_param_rdelay=%u\n"""           \
+                                """testbed_param_rrate=%u\n"""            \
+                                """testbed_param_delay=%f\n"""            \
+                                """testbed_param_ackreor=%u\n"""          \
+                                """testbed_param_ackloss=%u\n"""          \
+                                """testbed_param_reordering=%s\n"""       \
+                                """testbed_param_variable=%s\n"""         \
+                                """testbed_param_bottleneckbw=%u\n"""       %(limit, rdelay, reorder, delay, ackreor, ackloss, reorder_mode, var, bottleneckbw))
+                            logfile.write(old)
+                            logfile.close()
 
-                # header for analyze script
-                for prefix in logs:
-                    logfile = open("%s/%s_test_flowgrind" %(self.args.log_dir, prefix), "r+")
-                    old = logfile.read() # read everything in the file
-                    logfile.seek(0) # rewind
-                    logfile.write("""testbed_param_qlimit=%u\n""" \
-                        """testbed_param_rdelay=%u\n"""           \
-                        """testbed_param_rrate=%u\n"""            \
-                        """testbed_param_delay=%f\n"""            \
-                        """testbed_param_ackreor=%u\n"""          \
-                        """testbed_param_ackloss=%u\n"""          \
-                        """testbed_param_reordering=%s\n"""       \
-                        """testbed_param_variable=%s\n"""         \
-                        """testbed_param_bottleneckbw=%u\n"""       %(limit, rdelay, reorder, delay, ackreor, ackloss, reorder_mode, var, bottleneckbw))
-                    logfile.write(old)
-                    logfile.close()
-
-                info("Sleeping ..")
-                time.sleep(2)
+                        info("Sleeping ..")
+                        time.sleep(2)
         self.count += 1
 
     def run(self):
@@ -402,11 +405,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
     @parallel
     def exec_sudo(self,cmd):
-        if self.args.dry_run:
-            print (yellow(cmd))
-        else:
-            print (yellow(cmd))
-            sudo(cmd)
+        print (yellow(cmd))
+        sudo(cmd)
 
     def main(self):
         self.parse_options()
