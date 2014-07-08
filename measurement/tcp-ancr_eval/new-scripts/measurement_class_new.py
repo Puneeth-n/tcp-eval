@@ -36,7 +36,7 @@ import fabric.state
 # tcp-eval imports
 from measurement import measurement, tests
 # common options used for all ntests
-opts = dict(fg_bin="~/bin/flowgrind", duration=10, dump=True)
+opts = dict(fg_bin="~/bin/flowgrind", duration=120, dump=True)
 
 # repeat loop
 iterations = range(1)
@@ -178,9 +178,9 @@ class TcpaNCRMeasurement(measurement.Measurement):
             #forward path delay
             if 'fdnode' in chars:
                 if delay:
-                    fwd_cmd += " rate 1000mbit delay %ums %ums 20%" %(delay, (0.1*delay))
+                    fwd_cmd += " rate 1000mbit delay %ums %ums 20%%" %(delay, (0.1*delay))
                 else:
-                    fwd_cmd += " rate 1000mbit delay %ums %ums 20%" %(self.delay, (0.1*self.delay))
+                    fwd_cmd += " rate 1000mbit delay %ums %ums 20%%" %(self.delay, (0.1*self.delay))
                 set_fwd_cmd = True
 
             #forward path reordering
@@ -195,11 +195,11 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 if delay:
                     if (delay % 1) != 0:
                         delay += 1
-                        bck_cmd += " rate 1000mbit delay %ums %ums 20%" %((delay+1), (0.1*delay))
+                        bck_cmd += " rate 1000mbit delay %ums %ums 20%%" %((delay+1), (0.1*delay))
                     else:
-                        bck_cmd += " rate 1000mbit delay %ums %ums 20%" %((delay), (0.1*delay))
+                        bck_cmd += " rate 1000mbit delay %ums %ums 20%%" %((delay), (0.1*delay))
                 else:
-                    bck_cmd += " rate 1000mbit delay %ums %ums 20%" %((self.delay), (0.1*self.delay))
+                    bck_cmd += " rate 1000mbit delay %ums %ums 20%%" %((self.delay), (0.1*self.delay))
                 set_bck_cmd = True
 
             #Reverse path reordering
@@ -217,7 +217,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             if set_fwd_cmd:
                 tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
 
-    def start_test(self, log_file, src, dst, src_ctrl, dst_ctrl, duration=15, warmup=0, cc=None, dump=None,
+    def start_test(self, log_file, src, dst, src_ctrl, dst_ctrl, duration=120, warmup=0, cc=None, dump=None,
             bport=5999, opts=[], flowgrind_opts = [], fg_bin="flowgrind", **kwargs):
         """This test performs a simple flowgrind (new, aka dd version) test with
           one tcp flow from src to dst.
@@ -265,7 +265,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
         if dump:
             # set tcpdump at dest for tests
-            dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap &' %(src,self.logprefix)
+            #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap &' %(src,self.logprefix)
+            dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap > /dev/null 2>&1&' %(src,self.logprefix)
             tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst_ctrl)
             # set tcpdump at dest for tests
 
@@ -273,6 +274,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             print (yellow(cmd))
         else:
             # start flowgrind
+            print (green("Starting Flowgrind\n"))
             result = local(cmd, capture=True)
             if not result.return_code ==0:
                 print (red("Error executing flowgrind\n"))

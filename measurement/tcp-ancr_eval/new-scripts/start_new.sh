@@ -21,11 +21,10 @@ else
 fi
 
 
-MEASUREMENTS="scenario-1 scenario-2 scenario-2-rd30 scenario-2-rr4 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10"
-#MEASUREMENTS="scenario-1"
-#MEASUREMENTS="test"
-#MEASUREMENTS="scenario-1 scenario-2 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8"
+#MEASUREMENTS="scenario-1 scenario-2 scenario-2-rd30 scenario-2-rr4 scenario-3 scenario-3-rd10 scenario-3-rd20 scenario-4 scenario-4-rd10 scenario-4-rd20 scenario-5 scenario-6 scenario-7 scenario-8 scenario-9 scenario-10"
 
+#MEASUREMENTS="scenario-1 scenario-2"
+MEASUREMENTS="test-1"
 
 
 if [ "$1" = "init" ]; then
@@ -51,7 +50,7 @@ if [ "$1" = "measure" ]; then
         if [ $i -eq 1 ]; then
             #reset static routes on topology
             #Traffic shaping is done internally by the measurement script based on the pairs mentioned in the pair file
-            build-net /home/puneeth/test/reset_dumbbell.conf -s 
+            build-net /home/puneeth/test/reset_dumbbell.conf -s -t 
         fi
 
         for measurement in `echo $MEASUREMENTS`;
@@ -64,8 +63,8 @@ if [ "$1" = "measure" ]; then
 
             #start measurement
             ~/Development/tcp-eval/measurement/tcp-ancr_eval/new-scripts/$measurement.py pair.conf --iterations $ONE --offset $i -l $FOLDER/${measurement} 2>&1 | tee -a $FOLDER/${measurement}/${measurement}.log
-            ssh puneeth@192.168.5.1 "cd /tmp && nohup tar -czf ${measurement}-$i.tar.gz *.pcap"
-            ssh puneeth@192.168.5.1 "echo "$PASSWD"| sudo -S rm /tmp/*.pcap"
+            ssh puneeth@192.168.5.1 "nohup tar -czf ${measurement}-$i.tar.gz /tmp/*.pcap > /dev/null 2>&1" &&
+            ssh puneeth@192.168.5.1 "echo "$PASSWD"| sudo -S rm /tmp/*.pcap" &&
             ssh puneeth@192.168.5.1 "mv /tmp/${measurement}-$i.tar.gz $ABS/$FOLDER/${measurement}"
         done
     done
