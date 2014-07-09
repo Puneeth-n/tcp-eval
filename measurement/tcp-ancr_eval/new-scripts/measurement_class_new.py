@@ -43,12 +43,10 @@ iterations = range(1)
 
 # inner loop with different scenario settings
 scenarios = [
-             dict( scenario_label = "Native Linux DS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
-             dict( scenario_label = "Native Linux TS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
-             dict( scenario_label = "TCP-NCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ncr -O s=TCP_REORDER_MODE=1 -A s"),
-             dict( scenario_label = "TCP-NCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ncr -O s=TCP_REORDER_MODE=2 -A s"),
-             dict( scenario_label = "TCP-aNCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=1 -A s"),
-             dict( scenario_label = "TCP-aNCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=2 -A s"),
+             dict( scenario_label = "Native Linux DS",cc="cubic"),
+             dict( scenario_label = "Native Linux TS",cc="cubic"),
+#             dict( scenario_label = "Native Linux DS",cc="reno"),
+#             dict( scenario_label = "Native Linux TS",cc="reno"),
 ]
 
 env.username = 'puneeth'
@@ -90,6 +88,9 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 action="store", type=int, default="0", help="""offset used to
                 prefix log files(default: 0) Should be SET when iterating on all
                 scenarios repeatedly to ensure log files are not overwritten.""")
+        self.parser.add_argument("-n", "--netperf", action="store_true",
+                default=False, dest="netperf",
+                help="Use netperf instead of flowgrind (default: False")
         self.parser.add_argument("-y", "--dry-run", action="store_true",
                 default=False, dest="dry_run",
                 help="Test the pairs file without starting the experiment")
@@ -242,7 +243,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
         cmd = fg_bin
 
         # add -p for numerical output
-        cmd += " -p"
+        #cmd += " -p"
 
         # test duration
         cmd += " -T s=%.2f" % (duration)
@@ -268,27 +269,51 @@ class TcpaNCRMeasurement(measurement.Measurement):
         if dump:
             # set tcpdump at dest for tests
             #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap &' %(src,self.logprefix)
-            dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap > /dev/null 2>&1&' %(src,self.logprefix)
+            #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 -p -w /tmp/D%s.pcap > /dev/null 2>&1&' %(self.logprefix)
+            time.sleep(2)
+            dump_cmd = '(nohup tcpdump -pni eth0 -w /tmp/D%s.pcap) & sleep 2' %(self.logprefix)
             tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst_ctrl)
+            #time.sleep(2)
+            dump_cmd = '(nohup tcpdump -pni eth0 -w /tmp/S%s.pcap) & sleep 2' %(self.logprefix)
+            #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 -p -w /tmp/S%s.pcap > /dev/null 2>&1&' %(self.logprefix)
+            tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=src_ctrl)
+            #time.sleep(2)
             # set tcpdump at dest for tests
 
-        if self.args.dry_run:
-            print (yellow(cmd))
+        if self.args.netperf:
+            cmd = 'netperf -l 120 -D 0.05 -L %s -H %s -t TCP_STREAM' %(src,dst)
+            if self.args.dry_run:
+                print(yellow(cmd))
+            else:
+                # start netperf
+                print (green("Starting Netperf\n"))
+                result = local(cmd, capture=True)
+                if not result.return_code == 0:
+                    print (red("Error executing netperf\n"))
+                else:
+                    log_file.write(result.stdout)
+                    log_file.flush()
+
         else:
-            # start flowgrind
-            print (green("Starting Flowgrind\n"))
-            result = local(cmd, capture=True)
-            if not result.return_code ==0:
-                print (red("Error executing flowgrind\n"))
-                exit(1)
-            log_file.write(result.stdout)
-            log_file.flush()
+            if self.args.dry_run:
+                print (yellow(cmd))
+            else:
+                # start flowgrind
+                print (green("Starting Flowgrind\n"))
+                result = local(cmd, capture=True)
+                if not result.return_code == 0:
+                    print (red("Error executing flowgrind\n"))
+                else:
+                    log_file.write(result.stdout)
+                    log_file.flush()
 
         if dump:
             time.sleep(5)
             dump_cmd = "killall tcpdump"
             with settings(warn_only=True):
-                tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.dictExpMgt[dst])
+                tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=[src_ctrl,dst_ctrl])
+        if not result.return_code == 0:
+            exit(1)
         print (green("Finished test."))
 
     def prepare_test(self, append=False, **kwargs):
