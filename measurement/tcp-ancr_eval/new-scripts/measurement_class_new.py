@@ -166,14 +166,14 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 if bottleneckbw:
                     tc_cmd = """tc class change dev eth0 parent 1: classid 1:1 htb rate %umbit &&
                             tc class change dev eth0 parent 1: classid 1:2 htb rate %umbit""" %(bottleneckbw, bottleneckbw)
-                    #tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=self.dictExpMgt[ip])
+                    tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=self.dictExpMgt[ip])
 
                 if limit:
                     fwd_cmd += " limit %u" %limit
                     bck_cmd += " limit %u" %limit
                     #assuming that the qlnode has just bottleneck and queue limit constraints, the command is executed here
-                    tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
-                    tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=self.dictExpMgt[ip])
+                    #tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
+                    #tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=self.dictExpMgt[ip])
                 continue
 
             #forward path delay
