@@ -78,7 +78,7 @@ class BuildNet(Application):
                 match ip dst %(dst)s""")
         self.shapecmd = textwrap.dedent("""\
                 tc class add dev %(iface)s parent 1: classid 1:%(nr)d htb rate %(rate)smbit && \
-                tc filter add dev %(iface)s parent 1: protocol ip prio 1 u32 \
+                tc filter add dev %(iface)s parent 1: protocol ip prio 16 u32 \
                 flowid 1:%(nr)d \
                 match ip src %(src)s""")
 #                match ip protocol 1 0xff flowid 1:%(nr)d \

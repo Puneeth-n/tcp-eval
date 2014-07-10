@@ -43,10 +43,8 @@ iterations = range(1)
 
 # inner loop with different scenario settings
 scenarios = [
-             dict( scenario_label = "Native Linux DS",cc="cubic"),
-             dict( scenario_label = "Native Linux TS",cc="cubic"),
-#             dict( scenario_label = "Native Linux DS",cc="reno"),
-#             dict( scenario_label = "Native Linux TS",cc="reno"),
+             dict( scenario_label = "Native Linux DS",cc="reno"),
+             dict( scenario_label = "Native Linux TS",cc="reno"),
 ]
 
 env.username = 'puneeth'
@@ -168,7 +166,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 if bottleneckbw:
                     tc_cmd = """tc class change dev eth0 parent 1: classid 1:1 htb rate %umbit &&
                             tc class change dev eth0 parent 1: classid 1:2 htb rate %umbit""" %(bottleneckbw, bottleneckbw)
-                    tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=self.dictExpMgt[ip])
+                    #tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=self.dictExpMgt[ip])
 
                 if limit:
                     fwd_cmd += " limit %u" %limit
