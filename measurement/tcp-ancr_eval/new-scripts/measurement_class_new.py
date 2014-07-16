@@ -169,11 +169,11 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     tasks.execute(self.exec_sudo, cmd=tc_cmd, hosts=self.dictExpMgt[ip])
 
                 if limit:
-                    fwd_cmd += " limit %u" %limit
-                    bck_cmd += " limit %u" %limit
+                    fwd_cmd = "tc qdisc %s dev eth0 parent 1:2 handle 20: pfifo limit %u " %(mode, limit)
+                    bck_cmd = "tc qdisc %s dev eth0 parent 1:1 handle 10: pfifo limit %u " %(mode, limit)
                     #assuming that the qlnode has just bottleneck and queue limit constraints, the command is executed here
-                    #tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
-                    #tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=self.dictExpMgt[ip])
+                    tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
+                    tasks.execute(self.exec_sudo, cmd=bck_cmd, hosts=self.dictExpMgt[ip])
                 continue
 
             #forward path delay
