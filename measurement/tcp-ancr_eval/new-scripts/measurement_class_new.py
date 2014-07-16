@@ -116,14 +116,17 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
         self.runs = list()
 
-        #check for all non duplicate pairs from file
+        #check for all non duplicate pairs from pairs file
         for src, dst in self.config.items("PAIRS"):
-            self.runs.append(dict(src=src,dst=dst,run_label=(lambda src,dst: r"%s\\sra%s"%(src,dst))(src,dst)))
+            self.runs.append(dict(flowgrind_src=src,flowgrind_dst=dst,run_label=(lambda src,dst: r"%s\\sra%s"%(src,dst))(src,dst)))
 
         self.dictCharIp = {char:ip for char, ip in self.config.items("CONFIGURATION")}
         #print self.dictCharIp
         self.dictExpMgt = {exp:mgt for exp, mgt in self.config.items("MANAGEMENT")}
 
+        #Each node has a characteristic. The list of characteristics are mentioned in the pairs file.
+        #The idea of this for loop is to group all characteristics of a particular node so that 
+        #traffic shaping can be performed cumulatively!
         for char,ip in self.dictCharIp.items():
             self.dictIpCount[ip].append(char)
 
@@ -137,6 +140,20 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.scenarios = scenarios
         self.iterations = self.args.iterations
         self.offset = self.args.offset
+
+    def reset_sysctl(self):
+        cmd = ("sysctl -w "
+                    "net.ipv4.tcp_no_metrics_save=1 "
+                    "net.ipv4.tcp_congestion_control=reno "
+                    "net.ipv4.tcp_sack=1 "
+                    "net.ipv4.tcp_dsack=1 "
+                    "net.ipv4.tcp_timestamps=0 "
+                    "net.ipv4.tcp_fack=0 "
+                    "net.ipv4.tcp_ecn=0 "
+                    "net.ipv4.tcp_mtu_probing=0 "
+                    "net.ipv4.tcp_frto=0"
+                )
+        tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
 
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode, **kwargs):
 
@@ -154,11 +171,11 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 tasks.execute(self.exec_sudo, cmd=cmd, hosts=("%s")%self.dictExpMgt[ip])
 
                 cmd = """tc class add dev eth0 parent 1: classid 1:1 htb rate 1000mbit &&
-                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:1 match ip src %s""" %(kwargs['dst'])
+                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:1 match ip src %s""" %(kwargs['flowgrind_dst'])
                 tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
 
                 cmd = """tc class add dev eth0 parent 1: classid 1:2 htb rate 1000mbit &&
-                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:2 match ip src %s""" %(kwargs['src'])
+                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:2 match ip src %s""" %(kwargs['flowgrind_src'])
                 tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
 
             #bottleneck bandwidth
@@ -218,7 +235,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             if set_fwd_cmd:
                 tasks.execute(self.exec_sudo, cmd=fwd_cmd, hosts=self.dictExpMgt[ip])
 
-    def start_test(self, log_file, src, dst, src_ctrl, dst_ctrl, duration=120, warmup=0, cc=None, dump=None,
+    def start_test(self, log_file, flowgrind_src, flowgrind_dst, src_ctrl, dst_ctrl, duration=120, warmup=0, cc=None, dump=None,
             bport=5999, opts=[], flowgrind_opts = [], fg_bin="flowgrind", **kwargs):
         """This test performs a simple flowgrind (new, aka dd version) test with
           one tcp flow from src to dst.
@@ -255,7 +272,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             cmd += " -O s=TCP_CONG_MODULE=%s" % (cc)
 
         # build host specifiers
-        cmd += " -H s=%s/%s,d=%s/%s" %(src, src_ctrl, dst, dst_ctrl)
+        cmd += " -H s=%s/%s,d=%s/%s" %(flowgrind_src, src_ctrl, flowgrind_dst, dst_ctrl)
 
         # just add additional parameters
         if opts:
@@ -266,20 +283,15 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
         if dump:
             # set tcpdump at dest for tests
-            #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 src host %s -w /tmp/%s.pcap &' %(src,self.logprefix)
-            #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 -p -w /tmp/D%s.pcap > /dev/null 2>&1&' %(self.logprefix)
             time.sleep(2)
             dump_cmd = '(nohup tcpdump -pni eth0 -w /tmp/D%s.pcap) & sleep 2' %(self.logprefix)
             tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst_ctrl)
-            #time.sleep(2)
             dump_cmd = '(nohup tcpdump -pni eth0 -w /tmp/S%s.pcap) & sleep 2' %(self.logprefix)
-            #dump_cmd = 'nohup tcpdump -nvK -s 150 -i eth0 -p -w /tmp/S%s.pcap > /dev/null 2>&1&' %(self.logprefix)
             tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=src_ctrl)
-            #time.sleep(2)
             # set tcpdump at dest for tests
 
         if self.args.netperf:
-            cmd = 'netperf -l 120 -D 0.05 -L %s -H %s -t TCP_STREAM' %(src,dst)
+            cmd = 'netperf -l 120 -D 0.05 -L %s -H %s -t TCP_STREAM' %(flowgrind_src,flowgrind_dst)
             if self.args.dry_run:
                 print(yellow(cmd))
             else:
@@ -354,9 +366,6 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     kwargs.update(opts)
                     kwargs.update(self.runs[run_no])
 
-                    kwargs['flowgrind_src'] = kwargs['src']
-                    kwargs['flowgrind_dst'] = kwargs['dst']
-
                     # use a different port for every test
                     kwargs['bport'] = int("%u%u%02u" %(scenario_no + 1, self.count, run_no))
                     kwargs['duration'] = self.args.time
@@ -376,11 +385,11 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     else:
                         ts_cmd = "sysctl -w net.ipv4.tcp_timestamps=0"
 
-                    kwargs['src_ctrl'] = self.dictExpMgt[kwargs['src']]
-                    kwargs['dst_ctrl'] = self.dictExpMgt[kwargs['dst']]
+                    kwargs['src_ctrl'] = self.dictExpMgt[kwargs['flowgrind_src']]
+                    kwargs['dst_ctrl'] = self.dictExpMgt[kwargs['flowgrind_dst']]
 
-                    pairs.append(self.dictExpMgt[kwargs['src']])
-                    pairs.append(self.dictExpMgt[kwargs['dst']])
+                    pairs.append(self.dictExpMgt[kwargs['flowgrind_src']])
+                    pairs.append(self.dictExpMgt[kwargs['flowgrind_dst']])
 
                     tasks.execute(self.exec_sudo, cmd=ts_cmd, hosts=pairs)
 
@@ -434,6 +443,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
     def main(self):
         self.parse_options()
         self.apply_options()
+        self.reset_sysctl()
         self.run_all()
 
 if __name__ == "__main__":

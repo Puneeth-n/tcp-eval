@@ -9,4 +9,4 @@ fi
 DURATION=$1
 FOLDER=$2
 
-./test-1.py pair.conf -l $FOLDER -o 0 -i 1 -t $DURATION
+./test.py pair.conf -l $FOLDER -o 0 -i 1 -t $DURATION
