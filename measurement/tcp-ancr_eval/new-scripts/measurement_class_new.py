@@ -100,6 +100,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.dictCharIp = dict()
         self.dictIpCount = defaultdict(list)
         self.dictExpMgt = dict()
+        self.listPairs = list()
+        self.runs = list()
         self.count = 0
         self.delay = 20
         self.bnbw = 20
@@ -114,11 +116,11 @@ class TcpaNCRMeasurement(measurement.Measurement):
             print (red('SECTION(s) missing in config file'))
             exit(1)
 
-        self.runs = list()
-
         #check for all non duplicate pairs from pairs file
         for src, dst in self.config.items("PAIRS"):
             self.runs.append(dict(flowgrind_src=src,flowgrind_dst=dst,run_label=(lambda src,dst: r"%s\\sra%s"%(src,dst))(src,dst)))
+            if src not in self.listPairs: self.listPairs.append(src)
+            if dst not in self.listPairs: self.listPairs.append(dst)
 
         self.dictCharIp = {char:ip for char, ip in self.config.items("CONFIGURATION")}
         #print self.dictCharIp
@@ -153,11 +155,33 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     "net.ipv4.tcp_mtu_probing=0 "
                     "net.ipv4.tcp_frto=0"
                 )
-        tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
+        tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
+
+    def configure_NIC(self):
+        #Turn off segment offloading
+        cmd = ("ethtool --offload eth0 rx off tx off gso off gro off")
+        tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
+
 
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode, **kwargs):
 
         info("Setting netem..")
+
+        if mode == 'add':
+            cmd = 'tc qdisc del dev eth0 root'
+            with settings(warn_only=True):
+                tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
+
+            cmd = 'tc qdisc add dev eth0 root handle 1: htb'
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=set(self.dictCharIp.values()))
+
+            cmd = """tc class add dev eth0 parent 1: classid 1:1 htb rate 1000mbit &&
+                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:1 match ip src %s""" %(kwargs['flowgrind_dst'])
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=set(self.dictCharIp.values()))
+
+            cmd = """tc class add dev eth0 parent 1: classid 1:2 htb rate 1000mbit &&
+                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:2 match ip src %s""" %(kwargs['flowgrind_src'])
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=set(self.dictCharIp.values()))
 
         for ip, chars in self.dictIpCount.items():
 
@@ -165,18 +189,6 @@ class TcpaNCRMeasurement(measurement.Measurement):
             bck_cmd = "tc qdisc %s dev eth0 parent 1:1 handle 10: netem" %(mode)
             set_fwd_cmd = False
             set_bck_cmd = False
-
-            if mode == 'add':
-                cmd = 'tc qdisc del dev eth0 root && tc qdisc add dev eth0 root handle 1: htb'
-                tasks.execute(self.exec_sudo, cmd=cmd, hosts=("%s")%self.dictExpMgt[ip])
-
-                cmd = """tc class add dev eth0 parent 1: classid 1:1 htb rate 1000mbit &&
-                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:1 match ip src %s""" %(kwargs['flowgrind_dst'])
-                tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
-
-                cmd = """tc class add dev eth0 parent 1: classid 1:2 htb rate 1000mbit &&
-                    tc filter add dev eth0 parent 1: protocol ip prio 1 u32 flowid 1:2 match ip src %s""" %(kwargs['flowgrind_src'])
-                tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt[ip])
 
             #bottleneck bandwidth
             if 'qlnode' in chars:
@@ -444,6 +456,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.parse_options()
         self.apply_options()
         self.reset_sysctl()
+        self.configure_NIC()
         self.run_all()
 
 if __name__ == "__main__":
