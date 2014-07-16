@@ -43,8 +43,12 @@ iterations = range(1)
 
 # inner loop with different scenario settings
 scenarios = [
-             dict( scenario_label = "Native Linux DS",cc="reno"),
-             dict( scenario_label = "Native Linux TS",cc="reno"),
+             dict( scenario_label = "Native Linux DS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
+             dict( scenario_label = "Native Linux TS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
+             dict( scenario_label = "TCP-NCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ncr -O s=TCP_REORDER_MODE=1 -A s"),
+             dict( scenario_label = "TCP-NCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ncr -O s=TCP_REORDER_MODE=2 -A s"),
+             dict( scenario_label = "TCP-aNCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=1 -A s"),
+             dict( scenario_label = "TCP-aNCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=2 -A s"),
 ]
 
 env.username = 'puneeth'
