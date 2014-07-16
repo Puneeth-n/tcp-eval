@@ -160,7 +160,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
     def configure_NIC(self):
         #Turn off segment offloading
         cmd = ("ethtool --offload eth0 rx off tx off gso off gro off")
-        tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
+        with settings(warn_only=True):
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
 
 
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode, **kwargs):
