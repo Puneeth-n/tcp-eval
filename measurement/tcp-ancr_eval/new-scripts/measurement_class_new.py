@@ -338,10 +338,13 @@ class TcpaNCRMeasurement(measurement.Measurement):
         if dump:
             time.sleep(5)
             dump_cmd = "killall tcpdump"
+            cmd = "mv /tmp/* %s" %(self.dump_dir)
             with settings(warn_only=True):
                 tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.listPairs)
+                tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
         if not result.return_code == 0:
             exit(1)
+
         print (green("Finished test."))
 
     def prepare_test(self, append=False, **kwargs):
@@ -456,11 +459,6 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
     def run_all(self):
         self.run()
-        if opts.get('dump'):
-            cmd = "mv /tmp/* %s" %(self.dump_dir)
-            with settings(warn_only=True):
-                tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
-
         disconnect_all()
 
     @parallel
