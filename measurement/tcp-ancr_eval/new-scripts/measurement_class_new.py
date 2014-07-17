@@ -109,6 +109,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.count = 0
         self.delay = 20
         self.bnbw = 20
+        self.dump_dir = None
 
     def apply_options(self):
         """Set options"""
@@ -119,12 +120,6 @@ class TcpaNCRMeasurement(measurement.Measurement):
         if not (self.config.has_section("PAIRS") and self.config.has_section("CONFIGURATION") and self.config.has_section("MANAGEMENT")):
             print (red('SECTION(s) missing in config file'))
             exit(1)
-
-        #check for all non duplicate pairs from pairs file
-        for src, dst in self.config.items("PAIRS"):
-            self.runs.append(dict(flowgrind_src=src,flowgrind_dst=dst,run_label=(lambda src,dst: r"%s\\sra%s"%(src,dst))(src,dst)))
-            if src not in self.listPairs: self.listPairs.append(src)
-            if dst not in self.listPairs: self.listPairs.append(dst)
 
         self.dictCharIp = {char:ip for char, ip in self.config.items("CONFIGURATION")}
         #print self.dictCharIp
@@ -142,6 +137,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
             #print self.dictIpCount.items()
             #print self.dictIpCount.keys()
             #print self.dictIpCount.values()
+
+        #check for all non duplicate pairs from pairs file
+        for src, dst in self.config.items("PAIRS"):
+            self.runs.append(dict(flowgrind_src=src,flowgrind_dst=dst,run_label=(lambda src,dst: r"%s\\sra%s"%(src,dst))(src,dst)))
+            if self.dictExpMgt[src] not in self.listPairs: self.listPairs.append(self.dictExpMgt[src])
+            if self.dictExpMgt[dst] not in self.listPairs: self.listPairs.append(self.dictExpMgt[dst])
 
         self.scenarios = scenarios
         self.iterations = self.args.iterations
@@ -301,9 +302,9 @@ class TcpaNCRMeasurement(measurement.Measurement):
         if dump:
             # set tcpdump at dest for tests
             time.sleep(2)
-            dump_cmd = '(nohup tcpdump -pni eth0 -w /tmp/D%s.pcap) & sleep 2' %(self.logprefix)
-            tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst_ctrl)
-            dump_cmd = '(nohup tcpdump -pni eth0 -w /tmp/S%s.pcap) & sleep 2' %(self.logprefix)
+            dump_cmd = '(nohup tcpdump -pni eth0 -s 150 -w /tmp/D%s.pcap) & sleep 2' %(self.logprefix)
+            #tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=dst_ctrl)
+            dump_cmd = '(nohup tcpdump -pni eth0 -s 150 -w /tmp/S%s.pcap) & sleep 2' %(self.logprefix)
             tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=src_ctrl)
             # set tcpdump at dest for tests
 
@@ -338,7 +339,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             time.sleep(5)
             dump_cmd = "killall tcpdump"
             with settings(warn_only=True):
-                tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=[src_ctrl,dst_ctrl])
+                tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.listPairs)
         if not result.return_code == 0:
             exit(1)
         print (green("Finished test."))
@@ -349,6 +350,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
         if not os.path.exists(self.args.log_dir):
             info("%s does not exist, creating. " % self.args.log_dir)
             os.mkdir(self.args.log_dir)
+
+        if opts.get('dump'):
+            self.dump_dir = self.args.log_dir
+            self.dump_dir += '/dumps'
+            if not os.path.exists(self.dump_dir):
+                os.mkdir(self.dump_dir)
 
         log_name = "%s_test_flowgrind" %(self.logprefix)
         log_path = os.path.join(self.args.log_dir, log_name)
@@ -449,6 +456,10 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
     def run_all(self):
         self.run()
+        if opts.get('dump'):
+            cmd = "mv /tmp/* %s" %(self.dump_dir)
+            with settings(warn_only=True):
+                tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
 
         disconnect_all()
 
