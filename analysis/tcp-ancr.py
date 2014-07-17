@@ -83,8 +83,14 @@ class TCPaNCR_Analysis(Analysis):
 
         try:
             recordHeader   = record.getHeader()
-            src            = recordHeader["src"]
-            dst            = recordHeader["dst"]
+            if recordHeader.has_key("src"):
+                src            = recordHeader["src"]
+            else:
+                src            = recordHeader["flowgrind_src"]
+            if recordHeader.has_key("dst"):
+                dst            = recordHeader["dst"]
+            else:
+                dst            = recordHeader["flowgrind_dst"]
             run_label      = recordHeader["run_label"]
             scenario_label = recordHeader["scenario_label"]
             variable       = recordHeader["testbed_param_variable"]
@@ -93,6 +99,7 @@ class TCPaNCR_Analysis(Analysis):
             rrate          = int(recordHeader["testbed_param_rrate"])
             rdelay         = int(recordHeader["testbed_param_rdelay"])
         except:
+            print "Flowgrind header error!\n"
             return
 
         try:
