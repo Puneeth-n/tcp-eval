@@ -160,6 +160,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     "net.ipv4.tcp_mtu_probing=0 "
                     "net.ipv4.tcp_frto=0 "
                     "net.ipv4.tcp_early_retrans=0 "
+                    "net.ipv4.tcp_liberal_cwnd=0 "
                 )
         tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
 
