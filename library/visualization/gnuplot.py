@@ -71,12 +71,12 @@ class UmGnuplot():
         set style line  8 lt rgb "#6495ED" lw 1 pt 7 ps 1 #CornflowerBlue
         set style line  9 lt rgb "#808000" lw 1 pt 7 ps 1 #Olive
         set style line 10 lt rgb "#C71585" lw 1 pt 7 ps 1 #MediumVioletRed
-        set style line  1 lt rgb "#8B0000" lw 1 pt 2 ps 1 #DarkRed
-        set style line  2 lt rgb "#8B0000" lw 1 pt 6 ps 1 #DarkRed
-        set style line  3 lt rgb "#006400" lw 1 pt 2 ps 1 #DarkGreen
-        set style line  4 lt rgb "#006400" lw 1 pt 6 ps 1 #DarkGreen
-        set style line  5 lt rgb "#00008B" lw 1 pt 6 ps 1 #DarkBlue
-        set style line  6 lt rgb "#00008B" lw 1 pt 2 ps 1 #DarkBlue
+        set style line  1 lt rgb "#8B0000" lw 1 pt 0 #DarkRed
+        set style line  2 lt rgb "#8B0000" lw 1 pt -1 #DarkRed
+        set style line  3 lt rgb "#006400" lw 1 pt -1 #DarkGreen
+        set style line  4 lt rgb "#006400" lw 1 pt -1 #DarkGreen
+        set style line  5 lt rgb "#00008B" lw 1 pt -1 #DarkBlue
+        set style line  6 lt rgb "#00008B" lw 1 pt -1 #DarkBlue
         set style line 14 lt rgb "#B8860B" lw 1 pt 7 ps 1 #DarkGoldenrod
         set style line 15 lt rgb "#9932CC" lw 1 pt 7 ps 1 #DarkOrchid
         set style line 16 lt rgb "#6B8E23" lw 1 pt 7 ps 1 #OliveDrab
