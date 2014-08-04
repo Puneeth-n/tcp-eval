@@ -160,15 +160,25 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     "net.ipv4.tcp_mtu_probing=0 "
                     "net.ipv4.tcp_frto=0 "
                     "net.ipv4.tcp_early_retrans=0 "
-                    "net.ipv4.tcp_liberal_cwnd=0 "
+                    "net.ipv4.tcp_moderate_rcvbuf=1 "
+                    "net.core.rmem_max=16777216 "
+                    "net.core.wmem_max=16777216 "
+                    "net.core.rmem_default=1048576 "
+                    "net.core.wmem_default=1048576 "
+                    'net.ipv4.tcp_rmem="4096 1048576 16777216" '
+                    'net.ipv4.tcp_wmem="4096 1048576 16777216" '
                 )
-        tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
+        tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
+
+        cmd = "sysctl -w net.ipv4.tcp_liberal_cwnd=1"
+        with settings(warn_only=True):
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
 
     def configure_NIC(self):
         #Turn off segment offloading
         cmd = ("ethtool --offload eth0 rx off tx off gso off gro off")
         with settings(warn_only=True):
-            tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
+            tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
 
 
     def run_netem(self, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw, mode, **kwargs):
@@ -180,7 +190,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
             with settings(warn_only=True):
                 tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
 
-            cmd = 'tc qdisc add dev eth0 root handle 1: htb'
+            cmd = 'tc qdisc add dev eth0 root handle 1: htb default 100'
             tasks.execute(self.exec_sudo, cmd=cmd, hosts=set(self.dictCharIp.values()))
 
             cmd = """tc class add dev eth0 parent 1: classid 1:1 htb rate 1000mbit &&
@@ -407,6 +417,14 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     kwargs.update(self.scenarios[scenario_no])
                     #print self.scenarios[scenario_no]
 
+
+                    if ("Linux" in self.scenarios[scenario_no]["scenario_label"]):
+                        cmd = "sysctl -w net.ipv4.tcp_liberal_cwnd=1"
+                    else:
+                        cmd = "sysctl -w net.ipv4.tcp_liberal_cwnd=0"
+                    with settings(warn_only=True):
+                        tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
+
                     # Timestamps.. dirty solution
                     ts_cmd = ""
                     if (self.scenarios[scenario_no]["scenario_label"] == "Native Linux TS"):
@@ -421,6 +439,18 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     pairs.append(self.dictExpMgt[kwargs['flowgrind_dst']])
 
                     tasks.execute(self.exec_sudo, cmd=ts_cmd, hosts=pairs)
+
+                    #HOTFIX initcwnd
+
+                    if (limit < 10):
+                        cmd_s = "ip route change default via 172.16.1.2 dev eth0 initcwnd 3"
+                        cmd_d = "ip route change default via 172.16.1.5 dev eth0 initcwnd 3"
+                    else:
+                        cmd_s = "ip route change default via 172.16.1.2 dev eth0 initcwnd 10"
+                        cmd_d = "ip route change default via 172.16.1.5 dev eth0 initcwnd 10"
+
+                    tasks.execute(self.exec_sudo, cmd=cmd_s, hosts=kwargs['src_ctrl'])
+                    tasks.execute(self.exec_sudo, cmd=cmd_d, hosts=kwargs['dst_ctrl'])
 
                     # set source and dest for tests
                     # actually run tests

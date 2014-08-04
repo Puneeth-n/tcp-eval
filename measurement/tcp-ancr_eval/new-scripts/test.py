@@ -21,11 +21,11 @@ class Measurement(TcpaNCRMeasurement):
         self.first_run = True
         for itr in range(self.iterations):
             # Variate Bandwidth, no reordering
-            for bnbw in [2]:
+            for bnbw in [80]:
                 qlen = int((2 * self.delay * bnbw)/11.44)+1
 
                 # reorder_mode, var, reorder, ackreor, rdelay, delay, ackloss, limit, bottleneckbw
-                self.run_measurement("congestion", "bnbw", 2, 0, 20, 20, 0, qlen, bnbw)
+                self.run_measurement("congestion", "bnbw", 0, 0, 0, 20, 0, qlen, bnbw)
 
 if __name__ == "__main__":
     Measurement().main()
