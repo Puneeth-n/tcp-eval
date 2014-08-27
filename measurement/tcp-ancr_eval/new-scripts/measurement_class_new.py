@@ -43,12 +43,12 @@ iterations = range(1)
 
 # inner loop with different scenario settings
 scenarios = [
-             dict( scenario_label = "Native Linux DS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
-             dict( scenario_label = "Native Linux TS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
-             dict( scenario_label = "TCP-NCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ncr -O s=TCP_REORDER_MODE=1 -A s"),
-             dict( scenario_label = "TCP-NCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ncr -O s=TCP_REORDER_MODE=2 -A s"),
-             dict( scenario_label = "TCP-aNCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=1 -A s"),
-             dict( scenario_label = "TCP-aNCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=2 -A s"),
+        dict( scenario_label = "Native Linux DS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
+        dict( scenario_label = "Native Linux TS",cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=native -A s"),
+        dict( scenario_label = "TCP-NCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ncr -O s=TCP_REORDER_MODE=1 -A s"),
+        dict( scenario_label = "TCP-NCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ncr -O s=TCP_REORDER_MODE=2 -A s"),
+        dict( scenario_label = "TCP-aNCR CF", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=1 -A s"),
+        dict( scenario_label = "TCP-aNCR AG", cc="reno",flowgrind_opts=" -O s=TCP_REORDER_MODULE=ancr -O s=TCP_REORDER_MODE=2 -A s"),
 ]
 
 env.username = 'puneeth'
@@ -110,6 +110,8 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.delay = 20
         self.bnbw = 20
         self.dump_dir = None
+        self.error = False
+        self.add = False
 
     def apply_options(self):
         """Set options"""
@@ -126,11 +128,12 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.dictExpMgt = {exp:mgt for exp, mgt in self.config.items("MANAGEMENT")}
 
         #Each node has a characteristic. The list of characteristics are mentioned in the pairs file.
-        #The idea of this for loop is to group all characteristics of a particular node so that 
+        #The idea of this for loop is to group all characteristics of a particular node so that
         #traffic shaping can be performed cumulatively!
         for char,ip in self.dictCharIp.items():
             self.dictIpCount[ip].append(char)
 
+        #debug prints
         #for ip, char in self.dictIpCount.items():
             #print ip
             #print char
@@ -148,6 +151,18 @@ class TcpaNCRMeasurement(measurement.Measurement):
         self.iterations = self.args.iterations
         self.offset = self.args.offset
 
+        #TODO: uncomment. flowgrindd check works 
+
+        if not self.args.netperf:
+            print (green("Checking for flowgrind daemon.. .\n"))
+            test_daemon = "pidof flowgrindd"
+            for host in self.listPairs:
+                with settings(host_string=host, warn_only=True), hide('running','stdout'):
+                    result = sudo(test_daemon)
+                    if not result.stdout.isdigit():
+                        print (yellow("No flowgrind daemon instance found. Starting flowgrind daemon\n"))
+                        run("~/bin/flowgrindd")
+
     def reset_sysctl(self):
         cmd = ("sysctl -w "
                     "net.ipv4.tcp_no_metrics_save=1 "
@@ -160,24 +175,24 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     "net.ipv4.tcp_mtu_probing=0 "
                     "net.ipv4.tcp_frto=0 "
                     "net.ipv4.tcp_early_retrans=0 "
-                    "net.ipv4.tcp_moderate_rcvbuf=1 "
+                    "net.ipv4.tcp_moderate_rcvbuf=0 "
                     "net.core.rmem_max=16777216 "
                     "net.core.wmem_max=16777216 "
-                    "net.core.rmem_default=1048576 "
-                    "net.core.wmem_default=1048576 "
-                    'net.ipv4.tcp_rmem="4096 1048576 16777216" '
-                    'net.ipv4.tcp_wmem="4096 1048576 16777216" '
+                    "net.core.rmem_default=4194304 "
+                    "net.core.wmem_default=4194304 "
+                    'net.ipv4.tcp_rmem="4096 4194304 16777216" '
+                    'net.ipv4.tcp_wmem="4096 4194304 16777216" '
                 )
         tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
 
         cmd = "sysctl -w net.ipv4.tcp_liberal_cwnd=1"
-        with settings(warn_only=True):
+        with settings(warn_only=True), hide('stdout','running'):
             tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
 
     def configure_NIC(self):
         #Turn off segment offloading
         cmd = ("ethtool --offload eth0 rx off tx off gso off gro off")
-        with settings(warn_only=True):
+        with settings(warn_only=True), hide('stdout','running'):
             tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
 
 
@@ -187,7 +202,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
         if mode == 'add':
             cmd = 'tc qdisc del dev eth0 root'
-            with settings(warn_only=True):
+            with settings(warn_only=True), hide('stdout','running'):
                 tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.dictExpMgt.values())
 
             cmd = 'tc qdisc add dev eth0 root handle 1: htb default 100'
@@ -233,9 +248,15 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
             #forward path reordering
             #Assuming that I am booting a reorder only kernel in one of the nodes which exclusively does reordering.
-            if 'frnode' in chars and reorder:
-                fwd_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(reorder, (rdelay), (int)(rdelay * 0.1))
-                set_fwd_cmd = True
+            if 'frnode' in chars:
+                if not reorder and self.first_run:
+                    self.add = True
+                elif reorder:
+                    fwd_cmd += " reorder %u%% reorderdelay %ums %ums 20%%" %(reorder, (rdelay), (int)(rdelay * 0.1))
+                    if self.add:
+                        fwd_cmd = fwd_cmd.replace("change","add",1)
+                        self.add = False
+                    set_fwd_cmd = True
 
             #Reverse path delay
             if 'rdnode' in chars:
@@ -320,6 +341,10 @@ class TcpaNCRMeasurement(measurement.Measurement):
             tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=src_ctrl)
             # set tcpdump at dest for tests
 
+            #TODO: Introduce threading here
+            # check cpu usage on all nodes
+            #disk usage for tcpdump
+
         if self.args.netperf:
             cmd = 'netperf -l 120 -D 0.05 -L %s -H %s -t TCP_STREAM' %(flowgrind_src,flowgrind_dst)
             if self.args.dry_run:
@@ -330,6 +355,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
                 result = local(cmd, capture=True)
                 if not result.return_code == 0:
                     print (red("Error executing netperf\n"))
+                    self.error = True
                 else:
                     log_file.write(result.stdout)
                     log_file.flush()
@@ -340,24 +366,28 @@ class TcpaNCRMeasurement(measurement.Measurement):
             else:
                 # start flowgrind
                 print (green("Starting Flowgrind\n"))
+
                 result = local(cmd, capture=True)
                 if not result.return_code == 0:
                     print (red("Error executing flowgrind\n"))
+                    self.error = True
                 else:
                     log_file.write(result.stdout)
                     log_file.flush()
 
-        if dump:
+        if dump or self.error:
             time.sleep(5)
             dump_cmd = "killall tcpdump"
             cmd = "mv /tmp/* %s" %(self.dump_dir)
-            with settings(warn_only=True):
+            self.error = False
+            with settings(warn_only=True), hide('stdout','running'):
                 tasks.execute(self.exec_sudo, cmd=dump_cmd, hosts=self.listPairs)
                 tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
         if not result.return_code == 0:
             exit(1)
 
         print (green("Finished test."))
+        #TODO: threads end here
 
     def prepare_test(self, append=False, **kwargs):
         """Runs a test method with arguments self, logfile, args"""
@@ -388,7 +418,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
         log_file.flush()
 
         # actually run test
-        info("Starting test test_flowgrind with: %s", kwargs)
+        info("Starting test test_flowgrind/netperf with: %s", kwargs)
         self.start_test(log_file, **kwargs)
         #self._update_stats("test_flowgrind",rc)
         log_file.close()
@@ -422,7 +452,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
                         cmd = "sysctl -w net.ipv4.tcp_liberal_cwnd=1"
                     else:
                         cmd = "sysctl -w net.ipv4.tcp_liberal_cwnd=0"
-                    with settings(warn_only=True):
+                    with settings(warn_only=True), hide('stdout','running'):
                         tasks.execute(self.exec_sudo, cmd=cmd, hosts=self.listPairs)
 
                     # Timestamps.. dirty solution
@@ -442,15 +472,17 @@ class TcpaNCRMeasurement(measurement.Measurement):
 
                     #HOTFIX initcwnd
 
-                    if (limit < 10):
-                        cmd_s = "ip route change default via 172.16.1.2 dev eth0 initcwnd 3"
-                        cmd_d = "ip route change default via 172.16.1.5 dev eth0 initcwnd 3"
-                    else:
-                        cmd_s = "ip route change default via 172.16.1.2 dev eth0 initcwnd 10"
-                        cmd_d = "ip route change default via 172.16.1.5 dev eth0 initcwnd 10"
+                    #if (limit < 10):
+                    #    cmd_s = "ip route change default via 172.16.1.2 dev eth0 initcwnd 3"
+                    #    cmd_d = "ip route change default via 172.16.1.5 dev eth0 initcwnd 3"
+                    #else:
+                    #    cmd_s = "ip route change default via 172.16.1.2 dev eth0 initcwnd 10"
+                    #    cmd_d = "ip route change default via 172.16.1.5 dev eth0 initcwnd 10"
 
-                    tasks.execute(self.exec_sudo, cmd=cmd_s, hosts=kwargs['src_ctrl'])
-                    tasks.execute(self.exec_sudo, cmd=cmd_d, hosts=kwargs['dst_ctrl'])
+                    #tasks.execute(self.exec_sudo, cmd=cmd_s, hosts=kwargs['src_ctrl'])
+                    #tasks.execute(self.exec_sudo, cmd=cmd_d, hosts=kwargs['dst_ctrl'])
+
+                    #HOTFIX initcwnd
 
                     # set source and dest for tests
                     # actually run tests
@@ -465,6 +497,10 @@ class TcpaNCRMeasurement(measurement.Measurement):
                     if not self.args.dry_run:
                         self.prepare_test(**kwargs)
 
+                    #if bottleneck is not mentioned (in scenarios where we are application limited)
+                    #in the report we set it to 20.
+                    #yeah hardcoded :/ TODO:
+
                         # header for analyze script
                         for prefix in logs:
                             logfile = open("%s/%s_test_flowgrind" %(self.args.log_dir, prefix), "r+")
@@ -478,7 +514,7 @@ class TcpaNCRMeasurement(measurement.Measurement):
                                 """testbed_param_ackloss=%u\n"""          \
                                 """testbed_param_reordering=%s\n"""       \
                                 """testbed_param_variable=%s\n"""         \
-                                """testbed_param_bottleneckbw=%u\n"""       %(limit, rdelay, reorder, delay, ackreor, ackloss, reorder_mode, var, bottleneckbw))
+                                """testbed_param_bottleneckbw=%u\n"""%(limit if limit else 1000, rdelay, reorder, delay, ackreor, ackloss, reorder_mode, var, bottleneckbw if bottleneckbw else 20))
                             logfile.write(old)
                             logfile.close()
 
