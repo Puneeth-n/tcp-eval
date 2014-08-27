@@ -71,12 +71,13 @@ class UmGnuplot():
         set style line  8 lt rgb "#6495ED" lw 1 pt 7 ps 1 #CornflowerBlue
         set style line  9 lt rgb "#808000" lw 1 pt 7 ps 1 #Olive
         set style line 10 lt rgb "#C71585" lw 1 pt 7 ps 1 #MediumVioletRed
-        set style line  1 lt rgb "#8B0000" lw 1 pt 2 ps 1 #DarkRed
-        set style line  2 lt rgb "#8B0000" lw 1 pt 6 ps 1 #DarkRed
-        set style line  3 lt rgb "#006400" lw 1 pt 2 ps 1 #DarkGreen
-        set style line  4 lt rgb "#006400" lw 1 pt 6 ps 1 #DarkGreen
-        set style line  5 lt rgb "#00008B" lw 1 pt 2 ps 1 #DarkBlue
-        set style line  6 lt rgb "#00008B" lw 1 pt 6 ps 1 #DarkBlue
+        set style line  1 lt 5 lc rgb "#8B0000" lw 1 pt -1 #DarkRed
+        set style line  2 lt 1 lc rgb "#8B0000" lw 1 pt -1 #DarkRed
+        set style line  3 lt 5 lc rgb "#006400" lw 1 pt -1 #DarkGreen
+        set style line  4 lt 1 lc rgb "#006400" lw 1 pt -1 #DarkGreen
+        set style line  5 lt 5 lc rgb "#00008B" lw 1 pt -1 #DarkBlue
+        set style line  6 lt 1 lc rgb "#00008B" lw 1 pt -1 #DarkBlue
+        set style line 99 lt 1 lc rgb "black"   lw 2 pt -1 #BLACK for SD
         set style line 14 lt rgb "#B8860B" lw 1 pt 7 ps 1 #DarkGoldenrod
         set style line 15 lt rgb "#9932CC" lw 1 pt 7 ps 1 #DarkOrchid
         set style line 16 lt rgb "#6B8E23" lw 1 pt 7 ps 1 #OliveDrab
@@ -204,13 +205,14 @@ class UmGnuplot():
 
         info("Gnuplot: Generating %s" %texfilename)
         # always epslatex output
-        self.gplot('set terminal epslatex input color colortext solid '\
+        self.gplot('set terminal epslatex input color colortext '\
                 '"default" size %s font %u' \
                 %(self.plotsize,(int(round(self.fontsize*1.2)))))
         self.setOutput(texfilename)
 
         # do the actual plotting
         if self._plotcmd:
+            print self._plotcmd
             debug(self._plotcmd)
             self.gplot(self._plotcmd)
         else:
@@ -411,7 +413,8 @@ class UmLinePointPlot(UmGnuplot):
         usingstr = ""
         if using:
             usingstr = "using %s" %using
-        cmd = '"%s" %s title "%s" with yerrorbars ls %u' \
+        #cmd = '"%s" %s title "%s" with yerrorbars ls %u' \
+        cmd = '"%s" %s title "%s" with yerrorlines ls %u' \
                 %(values, usingstr, title, linestyle)
         UmGnuplot.plot(self, cmd)
 

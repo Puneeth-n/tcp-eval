@@ -353,7 +353,6 @@ class TCPaNCR_Analysis(Analysis):
             # plot
             if self.args.plot_error:
                 p.plotYerror(valfilename, scenarios[scenarioNo], linestyle=scenarioNo + 1, using="1:2:3")
-                p.plot(valfilename, title="", linestyle=scenarioNo + 1, using="1:2")
             else:
                 p.plot(valfilename, scenarios[scenarioNo], linestyle=scenarioNo + 1, using="1:2")
 
